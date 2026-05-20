@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { isDashboardPathname } from "@/lib/auth/dashboard-paths";
-import { isSupabaseConfigured, publicEnv } from "@/lib/env/public";
+import { getPublicEnv, isSupabaseConfigured } from "@/lib/env/public";
 import { copyCookiesToResponse } from "@/lib/http/copy-middleware-cookies";
 import { updateSession } from "@/integrations/supabase/middleware";
 
@@ -25,7 +25,7 @@ async function hasActiveStaffRow(
 }
 
 export async function middleware(request: NextRequest) {
-  if (!isSupabaseConfigured(publicEnv)) {
+  if (!isSupabaseConfigured(getPublicEnv())) {
     return NextResponse.next({ request });
   }
 

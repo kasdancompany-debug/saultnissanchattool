@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
-import { isSupabaseConfigured, publicEnv } from "@/lib/env/public";
+import { getPublicEnv, isSupabaseConfigured } from "@/lib/env/public";
 import type { Database } from "@/types/supabase";
 
 export function hasSupabaseServiceRoleKey(): boolean {
@@ -12,7 +12,7 @@ export function hasSupabaseServiceRoleKey(): boolean {
  * Never import from client components or expose to the browser.
  */
 export function createSupabaseAdminClient() {
-  if (!isSupabaseConfigured(publicEnv)) {
+  if (!isSupabaseConfigured(getPublicEnv())) {
     throw new Error(
       "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
     );
@@ -26,7 +26,7 @@ export function createSupabaseAdminClient() {
   }
 
   return createClient<Database>(
-    publicEnv.NEXT_PUBLIC_SUPABASE_URL,
+    getPublicEnv().NEXT_PUBLIC_SUPABASE_URL,
     serviceRoleKey,
     {
       auth: {

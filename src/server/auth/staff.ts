@@ -18,7 +18,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { createSupabaseServerClient } from "@/integrations/supabase/server";
-import { isSupabaseConfigured, publicEnv } from "@/lib/env/public";
+import { getPublicEnv, isSupabaseConfigured } from "@/lib/env/public";
 import type { TypedSupabaseClient } from "@/server/db/server-client";
 import type {
   Database,
@@ -47,7 +47,7 @@ export const getSession = cache(async (): Promise<{
   user: import("@supabase/supabase-js").User | null;
   supabase: TypedSupabaseClient | null;
 }> => {
-  if (!isSupabaseConfigured(publicEnv)) {
+  if (!isSupabaseConfigured(getPublicEnv())) {
     return { user: null, supabase: null };
   }
 

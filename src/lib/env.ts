@@ -6,5 +6,10 @@
  * - Startup validation: `import { validateStartupEnv } from "@/lib/env/startup"` from `instrumentation.ts` only.
  */
 
-export { isSupabaseConfigured, publicEnv, type PublicEnv } from "@/lib/env/public";
+export {
+  getPublicEnv,
+  isSupabaseConfigured,
+  publicEnv,
+  type PublicEnv,
+} from "@/lib/env/public";
 export type { ServerSecrets, StartupProductionEnv } from "@/lib/env/schema";

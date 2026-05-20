@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
-import { isSupabaseConfigured, publicEnv } from "@/lib/env/public";
+import { getPublicEnv, isSupabaseConfigured } from "@/lib/env/public";
 import type { Database } from "@/types/supabase";
 
 export type SupabaseMiddlewareClient = SupabaseClient<Database>;
@@ -14,7 +14,7 @@ export async function updateSession(
   user: User | null;
   supabase: SupabaseMiddlewareClient | null;
 }> {
-  if (!isSupabaseConfigured(publicEnv)) {
+  if (!isSupabaseConfigured(getPublicEnv())) {
     return {
       response: NextResponse.next({ request }),
       user: null,
@@ -22,11 +22,12 @@ export async function updateSession(
     };
   }
 
+  const env = getPublicEnv();
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
-    publicEnv.NEXT_PUBLIC_SUPABASE_URL,
-    publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
         getAll() {

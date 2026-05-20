@@ -8,7 +8,7 @@ import { AuthPageHeader } from "@/components/auth/auth-page-header";
 import { AuthProductLockup } from "@/components/auth/auth-product-lockup";
 import { LoginForm } from "@/components/auth/login-form";
 import { SessionSignOut } from "@/components/auth/session-sign-out";
-import { isSupabaseConfigured, publicEnv } from "@/lib/env/public";
+import { getPublicEnv, isSupabaseConfigured } from "@/lib/env/public";
 import { getSession } from "@/server/auth/staff";
 
 export const metadata: Metadata = {
@@ -30,7 +30,7 @@ export default async function LoginPage({
   const errorMessage =
     errorKey && errorMessages[errorKey] ? errorMessages[errorKey] : null;
   const passwordResetSuccess = params.reset === "success";
-  const supabaseReady = isSupabaseConfigured(publicEnv);
+  const supabaseReady = isSupabaseConfigured(getPublicEnv());
 
   let showSessionSignOut = false;
   if (errorKey === "staff_required") {

@@ -71,6 +71,14 @@ export function getNextPublicEnvForNextConfig(): Record<string, string> {
       out[key] = fromEnv;
     }
   }
+
+  const anon = out.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const publishable = out.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
+  const resolved = anon || publishable;
+  if (resolved) {
+    out.NEXT_PUBLIC_SUPABASE_ANON_KEY = resolved;
+  }
+
   return out;
 }
 
