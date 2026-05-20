@@ -8,6 +8,16 @@ import { loadDealershipAnalytics } from "@/server/data/analytics";
 export async function OverviewAnalyticsSection() {
   const staff = await requireStaff();
   const { supabase } = await getSession();
+  if (!supabase) {
+    return (
+      <div
+        className="border-destructive/30 bg-destructive/5 text-destructive rounded-sm border px-3 py-2.5 text-xs font-medium"
+        role="alert"
+      >
+        Supabase is not configured for this deployment.
+      </div>
+    );
+  }
   const analyticsRes = await loadDealershipAnalytics(staff.dealership_id, supabase);
 
   if (!analyticsRes.ok) {

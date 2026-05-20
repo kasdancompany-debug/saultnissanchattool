@@ -18,6 +18,8 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { createSupabaseServerClient } from "@/integrations/supabase/server";
+import { isSupabaseConfigured, publicEnv } from "@/lib/env/public";
+import type { TypedSupabaseClient } from "@/server/db/server-client";
 import type {
   Database,
   StaffDepartment,
@@ -41,7 +43,14 @@ export type CurrentStaffUser = {
   display_name: string;
 };
 
-export const getSession = cache(async () => {
+export const getSession = cache(async (): Promise<{
+  user: import("@supabase/supabase-js").User | null;
+  supabase: TypedSupabaseClient | null;
+}> => {
+  if (!isSupabaseConfigured(publicEnv)) {
+    return { user: null, supabase: null };
+  }
+
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -61,7 +70,7 @@ export const getSession = cache(async () => {
  */
 export const getCurrentStaff = cache(async (): Promise<CurrentStaff | null> => {
   const { user, supabase } = await getSession();
-  if (!user) {
+  if (!user || !supabase) {
     return null;
   }
 
