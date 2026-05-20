@@ -25,7 +25,6 @@ function parse(path) {
 const v = parse(envPath);
 const pub = v.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || v.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const pairs = {
-  SUPABASE_URL: v.NEXT_PUBLIC_SUPABASE_URL,
   SUPABASE_ANON_KEY: pub,
   APP_URL: "https://saultnissanchattool-br58.vercel.app",
 };
