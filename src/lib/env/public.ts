@@ -38,10 +38,49 @@ function readPublicEnvRaw() {
   };
 }
 
+const corePublicEnvSchema = publicEnvSchema.pick({
+  NEXT_PUBLIC_SUPABASE_URL: true,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: true,
+  NEXT_PUBLIC_APP_URL: true,
+});
+
+/** Blank or invalid optional URL fields should not block Supabase auth. */
+function sanitizeOptionalPublicUrls(
+  raw: ReturnType<typeof readPublicEnvRaw>
+): ReturnType<typeof readPublicEnvRaw> {
+  const optionalUrlKeys = [
+    "NEXT_PUBLIC_SENTRY_DSN",
+    "NEXT_PUBLIC_WIDGET_API_ORIGIN",
+  ] as const;
+  const next = { ...raw };
+  for (const key of optionalUrlKeys) {
+    const value = next[key]?.trim();
+    if (!value) {
+      next[key] = "";
+      continue;
+    }
+    try {
+      new URL(value);
+    } catch {
+      next[key] = "";
+    }
+  }
+  return next;
+}
+
 function parsePublicEnv(raw: ReturnType<typeof readPublicEnvRaw>): PublicEnv {
-  const parsed = publicEnvSchema.safeParse(raw);
+  const sanitized = sanitizeOptionalPublicUrls(raw);
+  const parsed = publicEnvSchema.safeParse(sanitized);
   if (parsed.success) {
     return parsed.data;
+  }
+
+  const core = corePublicEnvSchema.safeParse(sanitized);
+  if (core.success) {
+    return publicEnvSchema.parse({
+      ...sanitized,
+      ...core.data,
+    });
   }
 
   if (isNextProductionBuild()) {
@@ -55,7 +94,23 @@ function parsePublicEnv(raw: ReturnType<typeof readPublicEnvRaw>): PublicEnv {
     );
   }
 
-  return mergePublicEnvFallbacks(raw);
+  return mergePublicEnvFallbacks(sanitized);
+}
+
+/** True when Supabase public env is present in the live process environment. */
+export function isSupabaseConfiguredAtRuntime(): boolean {
+  const raw = readPublicEnvRaw();
+  const url = raw.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+  const key = raw.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
+  if (!url || !key || url.includes("build-placeholder") || key === "build-placeholder-anon-key") {
+    return false;
+  }
+  try {
+    new URL(url);
+    return key.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function mergePublicEnvFallbacks(
