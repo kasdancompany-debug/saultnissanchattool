@@ -13,8 +13,20 @@ const BUILD_PUBLIC_PLACEHOLDERS = {
 /** Prefix split so Next.js does not inline build-time placeholders into server bundles. */
 const NEXT_PUBLIC_PREFIX = "NEXT_PUBLIC_";
 
+/** Server-side aliases (set in Vercel alongside NEXT_PUBLIC_*). Not inlined at build. */
+const SERVER_PUBLIC_ALIASES: Partial<Record<string, string>> = {
+  SUPABASE_URL: "SUPABASE_URL",
+  SUPABASE_ANON_KEY: "SUPABASE_ANON_KEY",
+  APP_URL: "APP_URL",
+};
+
 /** Dynamic access so Next does not bake placeholders into server bundles at build time. */
 function runtimeEnv(suffix: string): string | undefined {
+  const alias = SERVER_PUBLIC_ALIASES[suffix];
+  if (alias) {
+    const server = process.env[alias]?.trim();
+    if (server) return server;
+  }
   return process.env[`${NEXT_PUBLIC_PREFIX}${suffix}`];
 }
 

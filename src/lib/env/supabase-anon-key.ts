@@ -5,6 +5,9 @@
 const NEXT_PUBLIC_PREFIX = "NEXT_PUBLIC_";
 
 export function resolveSupabaseAnonKeyFromEnv(): string {
+  const serverAnon = process.env.SUPABASE_ANON_KEY?.trim();
+  if (serverAnon) return serverAnon;
+
   const anon = process.env[`${NEXT_PUBLIC_PREFIX}SUPABASE_ANON_KEY`]?.trim();
   const publishable =
     process.env[`${NEXT_PUBLIC_PREFIX}SUPABASE_PUBLISHABLE_KEY`]?.trim();
