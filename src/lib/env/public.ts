@@ -10,31 +10,34 @@ const BUILD_PUBLIC_PLACEHOLDERS = {
   NEXT_PUBLIC_APP_URL: "https://build-placeholder.vercel.app",
 } as const;
 
+/** Prefix split so Next.js does not inline build-time placeholders into server bundles. */
+const NEXT_PUBLIC_PREFIX = "NEXT_PUBLIC_";
+
 /** Dynamic access so Next does not bake placeholders into server bundles at build time. */
-function runtimeEnv(name: string): string | undefined {
-  return process.env[name];
+function runtimeEnv(suffix: string): string | undefined {
+  return process.env[`${NEXT_PUBLIC_PREFIX}${suffix}`];
 }
 
 function readPublicEnvRaw() {
   return {
-    NEXT_PUBLIC_SUPABASE_URL: runtimeEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    NEXT_PUBLIC_SUPABASE_URL: runtimeEnv("SUPABASE_URL"),
     NEXT_PUBLIC_SUPABASE_ANON_KEY: resolveSupabaseAnonKeyFromEnv(),
-    NEXT_PUBLIC_APP_URL: runtimeEnv("NEXT_PUBLIC_APP_URL"),
-    NEXT_PUBLIC_SENTRY_DSN: runtimeEnv("NEXT_PUBLIC_SENTRY_DSN") ?? "",
-    NEXT_PUBLIC_WIDGET_API_KEY: runtimeEnv("NEXT_PUBLIC_WIDGET_API_KEY") ?? "",
+    NEXT_PUBLIC_APP_URL: runtimeEnv("APP_URL"),
+    NEXT_PUBLIC_SENTRY_DSN: runtimeEnv("SENTRY_DSN") ?? "",
+    NEXT_PUBLIC_WIDGET_API_KEY: runtimeEnv("WIDGET_API_KEY") ?? "",
     NEXT_PUBLIC_WIDGET_DEALERSHIP_SLUG:
-      runtimeEnv("NEXT_PUBLIC_WIDGET_DEALERSHIP_SLUG") ?? "sault-nissan",
-    NEXT_PUBLIC_WIDGET_API_ORIGIN: runtimeEnv("NEXT_PUBLIC_WIDGET_API_ORIGIN") ?? "",
+      runtimeEnv("WIDGET_DEALERSHIP_SLUG") ?? "sault-nissan",
+    NEXT_PUBLIC_WIDGET_API_ORIGIN: runtimeEnv("WIDGET_API_ORIGIN") ?? "",
     NEXT_PUBLIC_WIDGET_AFTER_HOURS_MESSAGE:
-      runtimeEnv("NEXT_PUBLIC_WIDGET_AFTER_HOURS_MESSAGE") ?? "",
+      runtimeEnv("WIDGET_AFTER_HOURS_MESSAGE") ?? "",
     NEXT_PUBLIC_WIDGET_WELCOME_MESSAGE:
-      runtimeEnv("NEXT_PUBLIC_WIDGET_WELCOME_MESSAGE") ?? "",
+      runtimeEnv("WIDGET_WELCOME_MESSAGE") ?? "",
     NEXT_PUBLIC_WIDGET_CONTACT_PHONE_TEL:
-      runtimeEnv("NEXT_PUBLIC_WIDGET_CONTACT_PHONE_TEL") ?? "",
+      runtimeEnv("WIDGET_CONTACT_PHONE_TEL") ?? "",
     NEXT_PUBLIC_WIDGET_CONTACT_PHONE_LABEL:
-      runtimeEnv("NEXT_PUBLIC_WIDGET_CONTACT_PHONE_LABEL") ?? "",
+      runtimeEnv("WIDGET_CONTACT_PHONE_LABEL") ?? "",
     NEXT_PUBLIC_WIDGET_CONTACT_EMAIL:
-      runtimeEnv("NEXT_PUBLIC_WIDGET_CONTACT_EMAIL") ?? "",
+      runtimeEnv("WIDGET_CONTACT_EMAIL") ?? "",
   };
 }
 
