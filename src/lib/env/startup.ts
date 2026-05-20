@@ -2,6 +2,7 @@ import "server-only";
 
 import { ZodError } from "zod";
 
+import { isNextProductionBuild } from "@/lib/env/build-phase";
 import {
   startupDevelopmentSchema,
   startupProductionSchema,
@@ -35,6 +36,19 @@ export function validateStartupEnv(): void {
     console.warn(
       "[env] SKIP_ENV_VALIDATION=1 — environment validation was skipped. Do not use in production."
     );
+    return;
+  }
+
+  if (isNextProductionBuild()) {
+    const hasPublic =
+      Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) &&
+      Boolean(resolveSupabaseAnonKeyFromEnv()) &&
+      Boolean(process.env.NEXT_PUBLIC_APP_URL?.trim());
+    if (!hasPublic) {
+      console.warn(
+        "[env] Build phase: NEXT_PUBLIC_* not set. Configure Vercel environment variables and redeploy so the live app can reach Supabase."
+      );
+    }
     return;
   }
 

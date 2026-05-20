@@ -43,8 +43,35 @@ export function parseNextPublicFromEnvLocalFile(): Record<string, string> {
  * Values for `next.config.js` `env` — forces client bundle to use `.env.local` for these keys
  * even when Windows pollutes `process.env` before Next starts.
  */
+const NEXT_PUBLIC_KEYS_FOR_CONFIG = [
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  "NEXT_PUBLIC_APP_URL",
+  "NEXT_PUBLIC_SENTRY_DSN",
+  "NEXT_PUBLIC_WIDGET_API_KEY",
+  "NEXT_PUBLIC_WIDGET_DEALERSHIP_SLUG",
+  "NEXT_PUBLIC_WIDGET_API_ORIGIN",
+  "NEXT_PUBLIC_WIDGET_AFTER_HOURS_MESSAGE",
+  "NEXT_PUBLIC_WIDGET_WELCOME_MESSAGE",
+  "NEXT_PUBLIC_WIDGET_CONTACT_PHONE_TEL",
+  "NEXT_PUBLIC_WIDGET_CONTACT_PHONE_LABEL",
+  "NEXT_PUBLIC_WIDGET_CONTACT_EMAIL",
+] as const;
+
+/**
+ * Values for `next.config` `env` — prefers `.env.local`, then `process.env` (Vercel build).
+ */
 export function getNextPublicEnvForNextConfig(): Record<string, string> {
-  return parseNextPublicFromEnvLocalFile();
+  const fromFile = parseNextPublicFromEnvLocalFile();
+  const out: Record<string, string> = { ...fromFile };
+  for (const key of NEXT_PUBLIC_KEYS_FOR_CONFIG) {
+    const fromEnv = process.env[key]?.trim();
+    if (fromEnv && !out[key]) {
+      out[key] = fromEnv;
+    }
+  }
+  return out;
 }
 
 export function applyEnvLocalOverrides(): void {

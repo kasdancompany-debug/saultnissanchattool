@@ -1,9 +1,17 @@
+import { isNextProductionBuild } from "@/lib/env/build-phase";
 import { publicEnvSchema } from "@/lib/env/schema";
 import type { PublicEnv } from "@/lib/env/schema";
 import { resolveSupabaseAnonKeyFromEnv } from "@/lib/env/supabase-anon-key";
 
-function readPublicEnv(): PublicEnv {
-  return publicEnvSchema.parse({
+/** Used only so `next build` can finish when Vercel env vars are not configured yet. */
+const BUILD_PUBLIC_PLACEHOLDERS = {
+  NEXT_PUBLIC_SUPABASE_URL: "https://build-placeholder.supabase.co",
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: "build-placeholder-anon-key",
+  NEXT_PUBLIC_APP_URL: "https://build-placeholder.vercel.app",
+} as const;
+
+function readPublicEnvRaw() {
+  return {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: resolveSupabaseAnonKeyFromEnv(),
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
@@ -22,16 +30,51 @@ function readPublicEnv(): PublicEnv {
       process.env.NEXT_PUBLIC_WIDGET_CONTACT_PHONE_LABEL ?? "",
     NEXT_PUBLIC_WIDGET_CONTACT_EMAIL:
       process.env.NEXT_PUBLIC_WIDGET_CONTACT_EMAIL ?? "",
-  });
+  };
+}
+
+function readPublicEnv(): PublicEnv {
+  const raw = readPublicEnvRaw();
+  const parsed = publicEnvSchema.safeParse(raw);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  if (isNextProductionBuild()) {
+    console.warn(
+      "[env] Missing or invalid NEXT_PUBLIC_* during build — using placeholders. " +
+        "Add environment variables in Vercel (Project Settings → Environment Variables) for Production and Preview, then redeploy."
+    );
+    return publicEnvSchema.parse({
+      ...BUILD_PUBLIC_PLACEHOLDERS,
+      ...raw,
+      NEXT_PUBLIC_SUPABASE_URL:
+        raw.NEXT_PUBLIC_SUPABASE_URL ?? BUILD_PUBLIC_PLACEHOLDERS.NEXT_PUBLIC_SUPABASE_URL,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY:
+        raw.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+        BUILD_PUBLIC_PLACEHOLDERS.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      NEXT_PUBLIC_APP_URL:
+        raw.NEXT_PUBLIC_APP_URL ?? BUILD_PUBLIC_PLACEHOLDERS.NEXT_PUBLIC_APP_URL,
+    });
+  }
+
+  return publicEnvSchema.parse(raw);
 }
 
 /**
  * Public (browser-safe) configuration. Only `NEXT_PUBLIC_*` values.
- * @throws {z.ZodError} if public variables are invalid — typically after `validateStartupEnv` in production.
+ * @throws {z.ZodError} if public variables are invalid at runtime (after build).
  */
 export const publicEnv: PublicEnv = readPublicEnv();
 
 export type { PublicEnv };
+
+function isBuildPlaceholderEnv(env: PublicEnv): boolean {
+  return (
+    env.NEXT_PUBLIC_SUPABASE_URL.includes("build-placeholder") ||
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY === "build-placeholder-anon-key"
+  );
+}
 
 export function isSupabaseConfigured(
   env: PublicEnv = publicEnv
@@ -39,6 +82,9 @@ export function isSupabaseConfigured(
   NEXT_PUBLIC_SUPABASE_URL: string;
   NEXT_PUBLIC_SUPABASE_ANON_KEY: string;
 } {
+  if (isBuildPlaceholderEnv(env)) {
+    return false;
+  }
   try {
     new URL(env.NEXT_PUBLIC_SUPABASE_URL);
     return env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length > 0;
