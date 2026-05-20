@@ -24,7 +24,7 @@ function throwStartupEnvError(
 
 /**
  * Validates configuration when the Node server boots (see `instrumentation.ts`).
- * - **Production**: requires all public + all server secrets (Sentry DSNs optional).
+ * - **Production**: logs missing public/core secrets but does not crash the process (configure in Vercel when ready).
  * - **Development**: requires public vars only. Twilio is optional at boot; set `TWILIO_*` in `.env.local` when
  *   exercising SMS (see `.env.example`). Twilio routes still fail fast via {@link getTwilioServerEnv}.
  *   Other server secrets (e.g. OpenAI) are still validated only when code calls `getServerEnv()`, not at boot.
@@ -85,7 +85,10 @@ export function validateStartupEnv(): void {
   if (isProduction) {
     const result = startupProductionBootSchema.safeParse(raw);
     if (!result.success) {
-      throwStartupEnvError("production", result.error);
+      console.error(
+        "[env] Production configuration incomplete (app will still start; features need env):\n%s",
+        formatEnvValidationDetails(result.error)
+      );
     }
     return;
   }

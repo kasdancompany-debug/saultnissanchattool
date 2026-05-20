@@ -38,7 +38,7 @@ function mapSignInError(message: string): string {
   return message;
 }
 
-export function LoginForm() {
+export function LoginForm({ disabled = false }: { disabled?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawRedirect = searchParams.get("redirect") ?? "/overview";
@@ -63,6 +63,10 @@ export function LoginForm() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (disabled) {
+      setError("Sign-in is not configured on this server yet.");
+      return;
+    }
     setError(null);
 
     const trimmedEmail = email.trim();
@@ -136,7 +140,7 @@ export function LoginForm() {
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? AUTH_FORM_ERROR_ID : undefined}
           className={authInputClassName}
-          disabled={pending}
+          disabled={pending || disabled}
           id="email"
           name="email"
           onChange={(e) => {
@@ -157,7 +161,7 @@ export function LoginForm() {
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? AUTH_FORM_ERROR_ID : undefined}
           autoComplete="current-password"
-          disabled={pending}
+          disabled={pending || disabled}
           onChange={(e) => {
             setPassword(e.target.value);
             setError(null);
@@ -185,7 +189,12 @@ export function LoginForm() {
 
       {error ? <AuthFormError id={AUTH_FORM_ERROR_ID}>{error}</AuthFormError> : null}
 
-      <AuthSubmitButton pending={pending} pendingLabel="Signing in…" type="submit">
+      <AuthSubmitButton
+        pending={pending}
+        pendingLabel="Signing in…"
+        type="submit"
+        disabled={disabled}
+      >
         Sign in to workspace
       </AuthSubmitButton>
     </AuthForm>

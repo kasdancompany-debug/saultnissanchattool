@@ -9,7 +9,11 @@ export async function register() {
     const { loadEnvConfig } = await import("@next/env");
     loadEnvConfig(process.cwd());
     const { validateStartupEnv } = await import("@/lib/env/startup");
-    validateStartupEnv();
+    try {
+      validateStartupEnv();
+    } catch (error) {
+      console.error("[env] Startup validation failed:", error);
+    }
     await import("../sentry.server.config");
   }
 

@@ -8,6 +8,7 @@ import { AuthPageHeader } from "@/components/auth/auth-page-header";
 import { AuthProductLockup } from "@/components/auth/auth-product-lockup";
 import { LoginForm } from "@/components/auth/login-form";
 import { SessionSignOut } from "@/components/auth/session-sign-out";
+import { isSupabaseConfigured, publicEnv } from "@/lib/env/public";
 import { getSession } from "@/server/auth/staff";
 
 export const metadata: Metadata = {
@@ -29,6 +30,7 @@ export default async function LoginPage({
   const errorMessage =
     errorKey && errorMessages[errorKey] ? errorMessages[errorKey] : null;
   const passwordResetSuccess = params.reset === "success";
+  const supabaseReady = isSupabaseConfigured(publicEnv);
 
   let showSessionSignOut = false;
   if (errorKey === "staff_required") {
@@ -60,6 +62,16 @@ export default async function LoginPage({
         }
       />
 
+      {!supabaseReady ? (
+        <AuthCallout variant="error" role="alert" className="mb-7">
+          Sign-in is not configured on this deployment yet. Add{" "}
+          <code className="font-mono text-xs">NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
+          <code className="font-mono text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>, and{" "}
+          <code className="font-mono text-xs">NEXT_PUBLIC_APP_URL</code> in Vercel → Environment
+          Variables, then redeploy.
+        </AuthCallout>
+      ) : null}
+
       {passwordResetSuccess || errorMessage ? (
         <div className="mb-7 space-y-4">
           {passwordResetSuccess ? (
@@ -76,7 +88,7 @@ export default async function LoginPage({
       ) : null}
 
       <Suspense fallback={<AuthFormFallback />}>
-        <LoginForm />
+        <LoginForm disabled={!supabaseReady} />
       </Suspense>
 
       {showSessionSignOut ? (

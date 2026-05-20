@@ -33,6 +33,24 @@ function readPublicEnvRaw() {
   };
 }
 
+function mergePublicEnvFallbacks(
+  raw: ReturnType<typeof readPublicEnvRaw>
+): PublicEnv {
+  return publicEnvSchema.parse({
+    ...BUILD_PUBLIC_PLACEHOLDERS,
+    ...raw,
+    NEXT_PUBLIC_SUPABASE_URL:
+      raw.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
+      BUILD_PUBLIC_PLACEHOLDERS.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY:
+      raw.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+      BUILD_PUBLIC_PLACEHOLDERS.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_APP_URL:
+      raw.NEXT_PUBLIC_APP_URL?.trim() ||
+      BUILD_PUBLIC_PLACEHOLDERS.NEXT_PUBLIC_APP_URL,
+  });
+}
+
 function readPublicEnv(): PublicEnv {
   const raw = readPublicEnvRaw();
   const parsed = publicEnvSchema.safeParse(raw);
@@ -45,25 +63,18 @@ function readPublicEnv(): PublicEnv {
       "[env] Missing or invalid NEXT_PUBLIC_* during build — using placeholders. " +
         "Add environment variables in Vercel (Project Settings → Environment Variables) for Production and Preview, then redeploy."
     );
-    return publicEnvSchema.parse({
-      ...BUILD_PUBLIC_PLACEHOLDERS,
-      ...raw,
-      NEXT_PUBLIC_SUPABASE_URL:
-        raw.NEXT_PUBLIC_SUPABASE_URL ?? BUILD_PUBLIC_PLACEHOLDERS.NEXT_PUBLIC_SUPABASE_URL,
-      NEXT_PUBLIC_SUPABASE_ANON_KEY:
-        raw.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-        BUILD_PUBLIC_PLACEHOLDERS.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      NEXT_PUBLIC_APP_URL:
-        raw.NEXT_PUBLIC_APP_URL ?? BUILD_PUBLIC_PLACEHOLDERS.NEXT_PUBLIC_APP_URL,
-    });
+  } else {
+    console.warn(
+      "[env] Missing or invalid NEXT_PUBLIC_* — app will load but sign-in stays disabled until Supabase env is set."
+    );
   }
 
-  return publicEnvSchema.parse(raw);
+  return mergePublicEnvFallbacks(raw);
 }
 
 /**
  * Public (browser-safe) configuration. Only `NEXT_PUBLIC_*` values.
- * @throws {z.ZodError} if public variables are invalid at runtime (after build).
+ * Never throws — missing values use placeholders and {@link isSupabaseConfigured} stays false.
  */
 export const publicEnv: PublicEnv = readPublicEnv();
 
