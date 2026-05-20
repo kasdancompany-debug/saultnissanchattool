@@ -5,7 +5,7 @@ import { ZodError } from "zod";
 import { isNextProductionBuild } from "@/lib/env/build-phase";
 import {
   startupDevelopmentSchema,
-  startupProductionSchema,
+  startupProductionBootSchema,
 } from "@/lib/env/schema";
 import {
   buildEnvConfigActionMessage,
@@ -83,7 +83,7 @@ export function validateStartupEnv(): void {
   };
 
   if (isProduction) {
-    const result = startupProductionSchema.safeParse(raw);
+    const result = startupProductionBootSchema.safeParse(raw);
     if (!result.success) {
       throwStartupEnvError("production", result.error);
     }

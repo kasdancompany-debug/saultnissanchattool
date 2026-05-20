@@ -69,7 +69,7 @@ export const publicEnv: PublicEnv = readPublicEnv();
 
 export type { PublicEnv };
 
-function isBuildPlaceholderEnv(env: PublicEnv): boolean {
+export function isBuildPlaceholderEnv(env: PublicEnv): boolean {
   return (
     env.NEXT_PUBLIC_SUPABASE_URL.includes("build-placeholder") ||
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY === "build-placeholder-anon-key"

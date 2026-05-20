@@ -159,6 +159,23 @@ export const startupDevelopmentSchema = publicEnvSchema.merge(twilioServerEnvSch
 /** @deprecated Use {@link startupDevelopmentSchema}; kept for callers that only meant “public dev”. */
 export const startupDevSchema = startupDevelopmentSchema;
 
+/** Full server contract (Twilio routes, privileged jobs). */
 export const startupProductionSchema = publicEnvSchema.merge(serverSecretsSchema);
+
+/**
+ * Vercel/server boot — public Supabase + core AI only. Twilio is validated when SMS/webhooks run.
+ */
+export const startupProductionBootSchema = publicEnvSchema.merge(
+  z.object({
+    SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+    OPENAI_API_KEY: z.string().min(1),
+    OPENAI_BASE_URL: openaiCompatibleBaseUrlSchema,
+    AI_MODEL: z.string().default("gpt-4o-mini"),
+    AI_CONFIDENCE_THRESHOLD: z.string().default("0.65"),
+    AI_INBOUND_CLASSIFICATION_ENABLED: z.string().default("true"),
+    AI_SERVICE_AFTER_HOURS_AUTOREPLY: z.string().default("true"),
+    SENTRY_DSN: z.union([z.string().url(), z.literal("")]).default(""),
+  })
+);
 
 export type StartupProductionEnv = z.infer<typeof startupProductionSchema>;

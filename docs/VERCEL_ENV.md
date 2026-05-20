@@ -2,15 +2,19 @@
 
 Add these in **Vercel → Project → Settings → Environment Variables**. Enable **Production** and **Preview**, then **Redeploy**.
 
-## Required (app will not work without these)
+## Required (login + inbox will 500 without these)
+
+Set these **before** deploy, then **Redeploy** so `NEXT_PUBLIC_*` are baked into the client bundle.
 
 | Variable | Example / notes |
 |----------|-----------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://xxxxx.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon JWT, **or** use `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` instead |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://xxxxx.supabase.co` (real project URL, not a placeholder) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon JWT, **or** `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` |
 | `NEXT_PUBLIC_APP_URL` | `https://your-project.vercel.app` (no trailing slash) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only; widget + webhooks |
 | `OPENAI_API_KEY` | AI classification + widget replies |
+
+If the site shows **500** on `/login`, the deployment is usually missing one of the rows above, or you added variables but did not **Redeploy**.
 
 ## Twilio (SMS)
 

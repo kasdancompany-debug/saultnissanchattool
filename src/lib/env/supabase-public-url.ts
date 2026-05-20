@@ -4,6 +4,7 @@
 const DISALLOWED_SUPABASE_HOSTS = new Set([
   "example.supabase.co",
   "your-project.supabase.co",
+  "build-placeholder.supabase.co",
 ]);
 
 /**
