@@ -402,11 +402,19 @@ export async function getInboxThread(
     return msgsRes;
   }
 
-  await syncCustomerProfileFromConversationThread(
-    dealershipId,
-    conversationId,
-    supabase
-  );
+  try {
+    await syncCustomerProfileFromConversationThread(
+      dealershipId,
+      conversationId,
+      supabase
+    );
+  } catch (syncErr) {
+    console.error(
+      "[inbox] syncCustomerProfileFromConversationThread failed",
+      conversationId,
+      syncErr
+    );
+  }
 
   let syncedCustomers = customers;
   const customerId = detail.customer_id?.trim();

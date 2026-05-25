@@ -1,3 +1,4 @@
+import { hasSupabaseServiceRoleKey } from "@/integrations/supabase/admin";
 import { isInboundOpenAiConfigured } from "@/lib/env/inbound-classification-config";
 import { isSupabaseConfiguredAtRuntime } from "@/lib/env/public";
 import { resolveSupabaseAnonKeyFromEnv } from "@/lib/env/supabase-anon-key";
@@ -30,5 +31,6 @@ export async function GET() {
     openai_inbound_configured: isInboundOpenAiConfigured(),
     has_WIDGET_SESSION_SECRET: (process.env.WIDGET_SESSION_SECRET?.trim() ?? "").length >= 32,
     has_OPENAI_API_KEY: (process.env.OPENAI_API_KEY?.trim() ?? "").length > 0,
+    has_SUPABASE_SERVICE_ROLE_KEY: hasSupabaseServiceRoleKey(),
   });
 }

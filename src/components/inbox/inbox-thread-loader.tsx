@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 import type { InboxSort } from "@/lib/inbox/inbox-sort";
 import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 import {
@@ -11,6 +9,7 @@ import { buildInboxHref } from "./inbox-params";
 import { InboxAiCopilotShell } from "./inbox-ai-copilot-drawer";
 import { InboxThreadPanel } from "./inbox-thread-panel";
 import { InboxThreadError } from "./inbox-thread-error";
+import { InboxThreadMissing } from "./inbox-thread-missing";
 
 export async function InboxThreadLoader({
   dealershipId,
@@ -38,12 +37,14 @@ export async function InboxThreadLoader({
 
   if (!threadRes.ok) {
     if (threadRes.error.code === "NOT_FOUND") {
-      redirect(
-        buildInboxHref(filter, {
-          ownerUserId: assigneeScopeUserId,
-          sort,
-          conversationId: null,
-        })
+      return (
+        <InboxThreadMissing
+          href={buildInboxHref(filter, {
+            ownerUserId: assigneeScopeUserId,
+            sort,
+            conversationId: null,
+          })}
+        />
       );
     }
     return <InboxThreadError message={threadRes.error.message} />;

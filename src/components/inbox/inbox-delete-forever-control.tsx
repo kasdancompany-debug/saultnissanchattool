@@ -46,6 +46,12 @@ export function InboxDeleteForeverControl({
   const count = conversationIds.length;
   const disabled = count === 0;
 
+  const listHref = buildInboxHref(filter, {
+    ownerUserId: assigneeScopeUserId,
+    sort,
+    conversationId: null,
+  });
+
   useEffect(() => {
     if (!state.ok) {
       return;
@@ -53,16 +59,10 @@ export function InboxDeleteForeverControl({
     setConfirming(false);
     onDeleted?.();
     startTransition(() => {
-      router.push(
-        buildInboxHref(filter, {
-          ownerUserId: assigneeScopeUserId,
-          sort,
-          conversationId: null,
-        })
-      );
+      router.replace(listHref);
       markInboxClientRefreshed();
     });
-  }, [state.ok, onDeleted, filter, sort, assigneeScopeUserId, router]);
+  }, [state.ok, onDeleted, listHref, router]);
 
   if (confirming) {
     return (
@@ -76,7 +76,20 @@ export function InboxDeleteForeverControl({
           Permanently delete {count === 1 ? "this conversation" : `${count} conversations`}?
           Messages and history cannot be recovered.
         </p>
-        <form action={formAction} className="flex shrink-0 items-center gap-1.5">
+        <form
+          action={formAction}
+          className="flex shrink-0 items-center gap-1.5"
+          onSubmit={() => {
+            router.replace(listHref);
+          }}
+        >
+          <input type="hidden" name="filter" value={filter} />
+          <input type="hidden" name="sort" value={sort} />
+          <input
+            type="hidden"
+            name="assigneeScopeUserId"
+            value={assigneeScopeUserId ?? ""}
+          />
           <input
             type="hidden"
             name="conversationIds"
