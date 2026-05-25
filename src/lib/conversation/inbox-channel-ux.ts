@@ -95,7 +95,7 @@ export function inboxChannelSurfaceAccentBarClass(surface: InboxChannelSurfaceId
     case "sms":
       return "bg-sky-500";
     case "web_chat":
-      return "bg-violet-500";
+      return "bg-slate-500 dark:bg-slate-400";
     case "messenger":
       return "bg-blue-600";
     case "instagram":

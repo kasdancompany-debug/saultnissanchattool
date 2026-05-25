@@ -196,8 +196,8 @@ export function InboxTopChrome({
                 className={cn(
                   "relative shrink-0 rounded-t-md px-3.5 py-2 text-[13px] font-semibold transition-[background-color,color,opacity,transform,box-shadow] duration-150 ease-out focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring/55 focus-visible:ring-offset-0 focus-visible:outline-none motion-reduce:transition-none enabled:active:scale-[0.98] sm:px-4",
                   isActive
-                    ? "bg-card text-primary ring-1 ring-inset ring-primary/12 shadow-[0_1px_0_rgba(15,23,42,0.05)] dark:ring-primary/22"
-                    : "text-muted-foreground hover:bg-primary/[0.04] hover:text-foreground dark:hover:bg-primary/[0.08]"
+                    ? "bg-card text-foreground shadow-[0_1px_0_rgba(15,23,42,0.06)] ring-1 ring-inset ring-foreground/10"
+                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                 )}
               >
                 <span className="flex items-center gap-2">
@@ -206,7 +206,7 @@ export function InboxTopChrome({
                     className={cn(
                       "rounded-md px-1.5 py-0.5 text-[11px] tabular-nums",
                       isActive
-                        ? "bg-primary/14 text-primary"
+                        ? "bg-foreground/8 text-foreground"
                         : "bg-muted/80 text-muted-foreground"
                     )}
                   >
@@ -215,7 +215,7 @@ export function InboxTopChrome({
                 </span>
                 {isActive ? (
                   <span
-                    className="bg-primary absolute right-3 left-3 -bottom-px h-0.5 rounded-full sm:right-4 sm:left-4"
+                    className="bg-foreground/25 absolute right-3 left-3 -bottom-px h-px rounded-full sm:right-4 sm:left-4"
                     aria-hidden
                   />
                 ) : null}
@@ -226,7 +226,7 @@ export function InboxTopChrome({
         <div className="from-border/50 via-border/25 relative h-px overflow-hidden bg-gradient-to-r to-transparent" aria-hidden>
           <span
             className={cn(
-              "bg-primary/40 absolute inset-y-0 left-0 w-24 transition-transform duration-500",
+              "bg-foreground/15 absolute inset-y-0 left-0 w-24 transition-transform duration-500",
               isPending ? "translate-x-0 animate-pulse" : "-translate-x-full"
             )}
           />

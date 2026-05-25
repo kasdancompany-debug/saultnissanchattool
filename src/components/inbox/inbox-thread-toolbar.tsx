@@ -127,6 +127,12 @@ export function InboxThreadToolbar({
   const pipeline = readPipelineFromMetadata(conversationMetadata);
   const pipelineActive = activePipelineOutcomes(pipeline);
 
+  const departmentActiveClass = (active: boolean, tint: string) =>
+    cn(
+      "shadow-none",
+      active ? cn("font-semibold text-foreground", tint) : undefined
+    );
+
   const pipelineButtonClass = (key: PipelineOutcomeKey, active: boolean) =>
     cn(
       active &&
@@ -301,7 +307,11 @@ export function InboxThreadToolbar({
                     name="intent"
                     value="mark_department_sales"
                     size="sm"
-                    variant={department === "sales" ? "default" : "outline"}
+                    variant="outline"
+                    className={departmentActiveClass(
+                      department === "sales",
+                      "border-rose-500/35 bg-rose-500/10"
+                    )}
                     title="Route this conversation to Sales."
                   >
                     Sales
@@ -311,7 +321,11 @@ export function InboxThreadToolbar({
                     name="intent"
                     value="mark_department_service"
                     size="sm"
-                    variant={department === "service" ? "default" : "outline"}
+                    variant="outline"
+                    className={departmentActiveClass(
+                      department === "service",
+                      "border-sky-500/35 bg-sky-500/10"
+                    )}
                     title="Route this conversation to Service."
                   >
                     Service
@@ -321,7 +335,11 @@ export function InboxThreadToolbar({
                     name="intent"
                     value="mark_department_general"
                     size="sm"
-                    variant={department === "general" ? "secondary" : "outline"}
+                    variant="outline"
+                    className={departmentActiveClass(
+                      department === "general",
+                      "border-foreground/20 bg-muted/50"
+                    )}
                     title="Route this conversation to General."
                   >
                     General

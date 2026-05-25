@@ -6,9 +6,13 @@ import type { InboxSort } from "@/lib/inbox/inbox-sort";
 import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 import type { InboxConversationListItem } from "@/lib/inbox/inbox-list-item";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 import { ConversationListRow } from "./conversation-list-row";
 import { InboxDeleteForeverControl } from "./inbox-delete-forever-control";
+
+const checkboxClassName =
+  "border-input accent-foreground/80 focus-visible:ring-ring size-3.5 rounded border shadow-sm focus-visible:ring-2 focus-visible:outline-none";
 
 export function ConversationListWithBulkDelete({
   items,
@@ -31,8 +35,7 @@ export function ConversationListWithBulkDelete({
 
   const allIds = useMemo(() => items.map((item) => item.id), [items]);
   const selectedCount = selectedIds.size;
-  const allSelected =
-    items.length > 0 && selectedCount === items.length;
+  const allSelected = items.length > 0 && selectedCount === items.length;
   const someSelected = selectedCount > 0 && !allSelected;
 
   const toggleOne = useCallback((id: string, checked: boolean) => {
@@ -65,48 +68,61 @@ export function ConversationListWithBulkDelete({
   return (
     <>
       {canDeleteForever ? (
-        <div className="border-border/60 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 sm:px-5">
-          <label className="text-foreground flex cursor-pointer items-center gap-2 text-[11px] font-medium">
-            <input
-              type="checkbox"
-              className="border-input text-primary focus-visible:ring-ring size-3.5 rounded border shadow-sm focus-visible:ring-2 focus-visible:outline-none"
-              checked={allSelected}
-              ref={(el) => {
-                if (el) {
-                  el.indeterminate = someSelected;
-                }
-              }}
-              onChange={toggleAll}
-              aria-label={allSelected ? "Clear selection" : "Select all in this list"}
-            />
-            <span>
-              {selectedCount > 0
-                ? `${selectedCount} selected`
-                : "Select all"}
-            </span>
-          </label>
+        <div
+          className={cn(
+            "shrink-0 border-b px-4 py-2.5 sm:px-5",
+            selectedCount > 0
+              ? "border-amber-500/20 bg-amber-500/[0.06]"
+              : "border-border/50 bg-muted/15"
+          )}
+        >
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <label className="text-foreground flex cursor-pointer items-center gap-2 text-[11px] font-medium">
+              <input
+                type="checkbox"
+                className={checkboxClassName}
+                checked={allSelected}
+                ref={(el) => {
+                  if (el) {
+                    el.indeterminate = someSelected;
+                  }
+                }}
+                onChange={toggleAll}
+                aria-label={allSelected ? "Clear selection" : "Select all in this list"}
+              />
+              <span>
+                {selectedCount > 0
+                  ? `${selectedCount} selected`
+                  : "Select all"}
+              </span>
+            </label>
 
-          {selectedCount > 0 ? (
-            <>
-              <button
-                type="button"
-                className="text-muted-foreground hover:text-foreground text-[11px] font-medium underline-offset-2 hover:underline"
-                onClick={clearSelection}
-              >
-                Clear
-              </button>
-              <div className="min-w-0 flex-1 basis-full sm:basis-auto">
-                <InboxDeleteForeverControl
-                  conversationIds={selectedIdList}
-                  filter={filter}
-                  sort={sort}
-                  assigneeScopeUserId={assigneeScopeUserId}
-                  selectedConversationId={selectedConversationId}
-                  onDeleted={clearSelection}
-                />
-              </div>
-            </>
-          ) : null}
+            {selectedCount > 0 ? (
+              <>
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground text-[11px] font-medium underline-offset-2 hover:underline"
+                  onClick={clearSelection}
+                >
+                  Clear
+                </button>
+                <div className="ms-auto min-w-0">
+                  <InboxDeleteForeverControl
+                    conversationIds={selectedIdList}
+                    filter={filter}
+                    sort={sort}
+                    assigneeScopeUserId={assigneeScopeUserId}
+                    selectedConversationId={selectedConversationId}
+                    onDeleted={clearSelection}
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="text-muted-foreground ms-auto text-[10px] font-normal">
+                Select threads to remove permanently
+              </p>
+            )}
+          </div>
         </div>
       ) : null}
 

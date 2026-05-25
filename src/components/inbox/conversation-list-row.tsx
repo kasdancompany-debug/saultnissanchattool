@@ -62,16 +62,18 @@ export function ConversationListRow({
   const band = opportunityScoreBand(opportunity.score);
   const ctx = item.card;
   const isHighPriority = band === "high";
+  const isBulkChecked = Boolean(bulkSelect?.checked);
 
   return (
     <div
       className={cn(
-        "group relative flex overflow-hidden rounded-lg border transition-[transform,box-shadow,border-color] duration-200 ease-out",
+        "group relative flex overflow-hidden rounded-lg border transition-[transform,box-shadow,border-color,background-color] duration-200 ease-out",
         priorityShell[band],
         isHighPriority && "motion-safe:hover:-translate-y-px",
         !isHighPriority && "hover:shadow-md",
         isSelected &&
-          "ring-2 ring-primary/30 border-primary/40 shadow-[inset_3px_0_0_0_var(--primary)]"
+          "border-foreground/20 bg-card shadow-[0_2px_12px_-4px_rgba(15,23,42,0.12)] ring-1 ring-foreground/8 dark:shadow-[0_2px_16px_-6px_rgba(0,0,0,0.45)]",
+        isBulkChecked && !isSelected && "border-border/80 bg-muted/30"
       )}
     >
       {bulkSelect ? (
@@ -82,7 +84,7 @@ export function ConversationListRow({
         >
           <input
             type="checkbox"
-            className="border-input text-primary focus-visible:ring-ring size-3.5 rounded border shadow-sm focus-visible:ring-2 focus-visible:outline-none"
+            className="border-input accent-foreground/80 focus-visible:ring-ring size-3.5 rounded border shadow-sm focus-visible:ring-2 focus-visible:outline-none"
             checked={bulkSelect.checked}
             onChange={(e) => bulkSelect.onCheckedChange(e.target.checked)}
             aria-label={`Select conversation with ${name}`}
@@ -100,9 +102,10 @@ export function ConversationListRow({
       >
       <div
         className={cn(
-          "absolute inset-y-0 left-0 w-[3px]",
+          "absolute inset-y-0 left-0 w-[3px] opacity-80",
           inboxChannelSurfaceAccentBarClass(ctx.channelSurface),
-          isHighPriority && "w-1 shadow-[0_0_14px_currentColor] opacity-90"
+          isSelected && "opacity-100",
+          isHighPriority && "opacity-95"
         )}
         aria-hidden
       />
