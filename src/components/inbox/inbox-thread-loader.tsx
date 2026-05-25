@@ -12,11 +12,13 @@ export async function InboxThreadLoader({
   conversationId,
   currentStaffUserId,
   canManageAssignments,
+  canDeleteForever,
 }: {
   dealershipId: string;
   conversationId: string;
   currentStaffUserId: string;
   canManageAssignments: boolean;
+  canDeleteForever: boolean;
 }) {
   const [threadRes, staffDirectoryRes] = await Promise.all([
     loadInboxThread(dealershipId, conversationId),
@@ -57,6 +59,7 @@ export async function InboxThreadLoader({
         workflowCaption={thread.workflow_caption}
         currentStaffUserId={currentStaffUserId}
         canManageAssignments={canManageAssignments}
+        canDeleteForever={canDeleteForever}
         staffDirectory={staffDirectory}
         conversationMetadata={thread.conversation.metadata}
         aiEnabled={thread.conversation.ai_enabled}

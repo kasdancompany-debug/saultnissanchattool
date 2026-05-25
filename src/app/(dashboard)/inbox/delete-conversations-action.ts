@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
+import { createSupabaseAdminClient } from "@/integrations/supabase/admin";
 import { requireStaff } from "@/server/auth/staff";
 import { deleteConversationsPermanently } from "@/server/data/delete-conversations";
-import { staffCanEditDealershipSettings } from "@/server/settings/staff-privilege";
 
 export type DeleteConversationsActionState = {
   ok: boolean;
@@ -39,16 +39,12 @@ export async function deleteConversationsForeverAction(
 ): Promise<DeleteConversationsActionState> {
   const staff = await requireStaff();
 
-  if (!staffCanEditDealershipSettings(staff)) {
-    return {
-      ok: false,
-      error: "Only managers and admins can permanently delete conversations.",
-      deletedCount: 0,
-    };
-  }
-
   const ids = parseConversationIds(formData.get("conversationIds"));
-  const res = await deleteConversationsPermanently(staff.dealership_id, ids);
+  const res = await deleteConversationsPermanently(
+    staff.dealership_id,
+    ids,
+    createSupabaseAdminClient()
+  );
 
   if (!res.ok) {
     return {

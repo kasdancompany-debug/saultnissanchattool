@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Clock } from "lucide-react";
 
+import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 import {
   getCustomerDisplayName,
   type InboxConversationListItem,
-  type InboxFilter,
-} from "@/server/data/inbox";
+} from "@/lib/inbox/inbox-list-item";
 import type { InboxSort } from "@/lib/inbox/inbox-sort";
 import { opportunityScoreBand } from "@/lib/opportunity/score-band";
 import { inboxChannelSurfaceAccentBarClass } from "@/lib/conversation/inbox-channel-ux";

@@ -10,10 +10,8 @@ import {
 } from "lucide-react";
 
 import type { InboxSort } from "@/lib/inbox/inbox-sort";
-import type {
-  InboxConversationListItem,
-  InboxFilter,
-} from "@/server/data/inbox";
+import type { InboxFilter } from "@/lib/inbox/inbox-filter";
+import type { InboxConversationListItem } from "@/lib/inbox/inbox-list-item";
 
 import { buttonVariants } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";

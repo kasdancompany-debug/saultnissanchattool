@@ -52,6 +52,7 @@ export function InboxThreadToolbar({
   workflowCaption,
   currentStaffUserId,
   canManageAssignments,
+  canDeleteForever,
   staffDirectory,
   conversationMetadata,
 }: {
@@ -63,6 +64,7 @@ export function InboxThreadToolbar({
   workflowCaption: string;
   currentStaffUserId: string;
   canManageAssignments: boolean;
+  canDeleteForever: boolean;
   staffDirectory: StaffPickerOption[];
   conversationMetadata: unknown;
 }) {
@@ -189,7 +191,7 @@ export function InboxThreadToolbar({
           <p className="text-muted-foreground text-sm">
             This conversation is read-only. Ownership and status cannot be changed here.
           </p>
-          {canManageAssignments ? (
+          {canDeleteForever ? (
             <InboxDeleteForeverControl
               conversationIds={[conversationId]}
               filter={inboxFilter}
@@ -490,7 +492,7 @@ export function InboxThreadToolbar({
                 </SubmitButton>
               ) : null}
             </div>
-            {canManageAssignments ? (
+            {canDeleteForever ? (
               <div className="mt-2">
                 <InboxDeleteForeverControl
                   conversationIds={[conversationId]}

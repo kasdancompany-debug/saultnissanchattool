@@ -77,6 +77,7 @@ export function InboxThreadPanel({
   workflowCaption,
   currentStaffUserId,
   canManageAssignments,
+  canDeleteForever,
   staffDirectory,
   conversationMetadata,
   aiEnabled,
@@ -98,6 +99,7 @@ export function InboxThreadPanel({
   workflowCaption: string;
   currentStaffUserId: string;
   canManageAssignments: boolean;
+  canDeleteForever: boolean;
   staffDirectory: StaffPickerOption[];
   conversationMetadata: unknown;
   aiEnabled: boolean;
@@ -201,6 +203,7 @@ export function InboxThreadPanel({
         workflowCaption={workflowCaption}
         currentStaffUserId={currentStaffUserId}
         canManageAssignments={canManageAssignments}
+        canDeleteForever={canDeleteForever}
         staffDirectory={staffDirectory}
         conversationMetadata={conversationMetadata}
       />

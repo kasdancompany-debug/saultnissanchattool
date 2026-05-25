@@ -17,8 +17,11 @@ import type { AiAssistPanelView } from "@/types/ai-assist-panel";
 import type { AiCopilotView } from "@/types/ai-copilot";
 import { resolveConversationHandlingMode } from "@/lib/conversation/control-metadata";
 import { readAiInsightsFromMetadata } from "@/lib/conversation/ai-insights-metadata";
-import { isPlaceholderCustomerName } from "@/lib/conversation/extract-profile-hints";
 import { resolveEffectiveCustomerProfile } from "@/lib/conversation/resolve-effective-customer-profile";
+import {
+  getCustomerDisplayName,
+  type InboxConversationListItem,
+} from "@/lib/inbox/inbox-list-item";
 import { isAfterHoursWebChatIntake } from "@/lib/conversation/widget-metadata";
 import { syncCustomerProfileFromConversationThread } from "@/server/conversation/sync-customer-profile-from-inbound";
 import { getCustomerById } from "@/server/data/customers";
@@ -46,24 +49,8 @@ export type { InboxFilter } from "@/lib/inbox/inbox-filter";
 /** Shown when conversations.assigned_to_user_id points to a missing staff_users row. */
 const UNKNOWN_ASSIGNEE_NAME = "Unknown teammate";
 
-export type InboxConversationListItem = Tables<"conversations"> & {
-  customers: {
-    display_name: string | null;
-    email: string | null;
-    phone_e164: string | null;
-  } | null;
-  assignee: {
-    id: string;
-    display_name: string;
-    email: string;
-  } | null;
-  last_message_preview: {
-    body: string;
-    created_at: string;
-  } | null;
-  opportunity: OpportunitySnapshot;
-  card: InboxConversationCardContext;
-};
+export type { InboxConversationListItem } from "@/lib/inbox/inbox-list-item";
+export { getCustomerDisplayName } from "@/lib/inbox/inbox-list-item";
 
 export type InboxMessageView = Tables<"messages"> & {
   sender_label: string;
@@ -520,22 +507,3 @@ export function buildWorkflowCaption(conv: Tables<"conversations">): string {
   return `${prefix}${tail}`;
 }
 
-export function getCustomerDisplayName(
-  customer: InboxConversationListItem["customers"],
-  fallbackTitle: string | null
-): string {
-  const display = customer?.display_name?.trim();
-  if (display && !isPlaceholderCustomerName(display)) {
-    return display;
-  }
-  if (customer?.phone_e164) {
-    return customer.phone_e164;
-  }
-  if (customer?.email) {
-    return customer.email;
-  }
-  if (fallbackTitle?.trim()) {
-    return fallbackTitle.trim();
-  }
-  return "Unknown customer";
-}
