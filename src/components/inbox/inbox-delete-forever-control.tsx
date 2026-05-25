@@ -59,69 +59,72 @@ export function InboxDeleteForeverControl({
     setConfirming(false);
     onDeleted?.();
     startTransition(() => {
-      router.replace(listHref);
+      if (window.location.search.includes("c=")) {
+        router.replace(listHref);
+      }
       router.refresh();
       markInboxClientRefreshed();
     });
   }, [state.ok, onDeleted, listHref, router]);
 
+  const errorAlert = state.error ? (
+    <p
+      className="text-destructive w-full text-[11px] font-medium leading-snug"
+      role="alert"
+    >
+      {state.error}
+    </p>
+  ) : null;
+
   if (confirming) {
     return (
-      <div
-        className={cn(
-          "flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2",
-          className
-        )}
-      >
-        <p className="text-destructive min-w-0 flex-1 text-[11px] font-medium leading-snug">
-          Permanently delete {count === 1 ? "this conversation" : `${count} conversations`}?
-          Messages and history cannot be recovered.
-        </p>
-        <form
-          action={formAction}
-          className="flex shrink-0 items-center gap-1.5"
-          onSubmit={() => {
-            router.replace(listHref);
-          }}
-        >
-          <input type="hidden" name="filter" value={filter} />
-          <input type="hidden" name="sort" value={sort} />
-          <input
-            type="hidden"
-            name="assigneeScopeUserId"
-            value={assigneeScopeUserId ?? ""}
-          />
-          <input
-            type="hidden"
-            name="conversationIds"
-            value={JSON.stringify(conversationIds)}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size={size}
-            className="h-8 px-2 text-[11px]"
-            disabled={isPending}
-            onClick={() => setConfirming(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="destructive"
-            size={size}
-            className="h-8 gap-1 px-2.5 text-[11px] font-semibold"
-            disabled={isPending || disabled}
-          >
-            {isPending ? "Deleting…" : "Delete forever"}
-          </Button>
-        </form>
+      <div className={cn("flex w-full min-w-0 flex-col gap-2", className)}>
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2">
+          <p className="text-destructive min-w-0 flex-1 text-[11px] font-medium leading-snug">
+            Permanently delete {count === 1 ? "this conversation" : `${count} conversations`}?
+            Messages and history cannot be recovered.
+          </p>
+          <form action={formAction} className="flex shrink-0 items-center gap-1.5">
+            <input type="hidden" name="filter" value={filter} />
+            <input type="hidden" name="sort" value={sort} />
+            <input
+              type="hidden"
+              name="assigneeScopeUserId"
+              value={assigneeScopeUserId ?? ""}
+            />
+            <input
+              type="hidden"
+              name="conversationIds"
+              value={JSON.stringify(conversationIds)}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size={size}
+              className="h-8 px-2 text-[11px]"
+              disabled={isPending}
+              onClick={() => setConfirming(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="destructive"
+              size={size}
+              className="h-8 gap-1 px-2.5 text-[11px] font-semibold"
+              disabled={isPending || disabled}
+            >
+              {isPending ? "Deleting…" : "Delete forever"}
+            </Button>
+          </form>
+        </div>
+        {errorAlert}
       </div>
     );
   }
 
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-1.5", className)}>
       <Button
         type="button"
         variant="destructive"
@@ -133,11 +136,7 @@ export function InboxDeleteForeverControl({
         <Trash2 className="size-3.5 shrink-0" aria-hidden />
         {label ?? (count === 1 ? "Delete forever" : `Delete forever (${count})`)}
       </Button>
-      {state.error ? (
-        <p className="text-destructive text-[11px] font-medium" role="alert">
-          {state.error}
-        </p>
-      ) : null}
+      {errorAlert}
     </div>
   );
 }

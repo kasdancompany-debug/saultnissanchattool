@@ -100,15 +100,17 @@ export function ConversationListRow({
         )}
         aria-current={isSelected ? "true" : undefined}
       >
-      <div
-        className={cn(
-          "absolute inset-y-0 left-0 w-[3px] opacity-80",
-          inboxChannelSurfaceAccentBarClass(ctx.channelSurface),
-          isSelected && "opacity-100",
-          isHighPriority && "opacity-95"
-        )}
-        aria-hidden
-      />
+      {!bulkSelect ? (
+        <div
+          className={cn(
+            "absolute inset-y-0 left-0 w-[3px] opacity-80",
+            inboxChannelSurfaceAccentBarClass(ctx.channelSurface),
+            isSelected && "opacity-100",
+            isHighPriority && "opacity-95"
+          )}
+          aria-hidden
+        />
+      ) : null}
 
       <div className="flex flex-col gap-2 py-2.5 pr-3 pl-4">
         <div className="flex items-start justify-between gap-2">

@@ -13,12 +13,8 @@ CREATE OR REPLACE FUNCTION public.staff_delete_conversations (
 DECLARE
   v_deleted integer;
 BEGIN
-  IF auth.uid () IS NULL THEN
-    RAISE EXCEPTION 'UNAUTHORIZED'
-      USING ERRCODE = '42501';
-  END IF;
-
-  IF NOT public.user_has_dealership_access (p_dealership_id) THEN
+  IF auth.uid () IS NOT NULL
+    AND NOT public.user_has_dealership_access (p_dealership_id) THEN
     RAISE EXCEPTION 'FORBIDDEN'
       USING ERRCODE = '42501';
   END IF;

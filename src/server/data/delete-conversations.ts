@@ -17,7 +17,21 @@ function isMissingRpcError(error: PostgrestError): boolean {
   return (
     error.code === "PGRST202" ||
     msg.includes("could not find the function") ||
-    msg.includes("function") && msg.includes("does not exist")
+    (msg.includes("function") && msg.includes("does not exist"))
+  );
+}
+
+/** RPC requires auth.uid(); service role and some JWT edge cases should use table DELETE. */
+function shouldFallbackFromRpcToTableDelete(error: PostgrestError): boolean {
+  if (isMissingRpcError(error)) {
+    return true;
+  }
+  const msg = error.message.toLowerCase();
+  return (
+    error.code === "42501" ||
+    msg.includes("unauthorized") ||
+    msg.includes("forbidden") ||
+    msg.includes("policy")
   );
 }
 
@@ -37,7 +51,7 @@ async function deleteViaRpc(
     return ok({ deletedCount: count });
   }
 
-  if (isMissingRpcError(rpc.error)) {
+  if (shouldFallbackFromRpcToTableDelete(rpc.error)) {
     return null;
   }
 
@@ -65,12 +79,13 @@ async function deleteViaTable(
 
 /**
  * Hard-delete conversations and cascaded messages/events.
- * Prefers `staff_delete_conversations` RPC (any active staff); falls back to table DELETE.
+ * Uses staff RPC when signed in; falls back to direct DELETE (RLS or service role).
  */
 export async function deleteConversationsPermanently(
   dealershipId: string,
   conversationIds: string[],
-  db?: TypedSupabaseClient
+  db?: TypedSupabaseClient,
+  options?: { preferTableDelete?: boolean }
 ): Promise<Result<{ deletedCount: number }>> {
   const d = dealershipId?.trim();
   if (!d) {
@@ -98,9 +113,17 @@ export async function deleteConversationsPermanently(
 
   const supabase = await resolveDb(db);
 
-  const rpcRes = await deleteViaRpc(supabase, d, ids);
-  if (rpcRes) {
-    return rpcRes;
+  if (!options?.preferTableDelete) {
+    const rpcRes = await deleteViaRpc(supabase, d, ids);
+    if (rpcRes) {
+      if (rpcRes.ok && rpcRes.data.deletedCount > 0) {
+        return rpcRes;
+      }
+      if (!rpcRes.ok) {
+        return rpcRes;
+      }
+      // RPC returned 0 rows — try direct delete (e.g. stale RPC policy).
+    }
   }
 
   return deleteViaTable(supabase, d, ids);

@@ -77,7 +77,7 @@ export function ConversationListWithBulkDelete({
           )}
         >
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <label className="text-foreground flex cursor-pointer items-center gap-2 text-[11px] font-medium">
+            <label className="text-foreground flex cursor-pointer items-center gap-2.5 text-[11px] font-medium">
               <input
                 type="checkbox"
                 className={checkboxClassName}

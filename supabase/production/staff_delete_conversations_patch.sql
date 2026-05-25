@@ -1,7 +1,5 @@
--- Run once in Supabase Dashboard → SQL Editor (production).
--- Enables permanent delete for all active staff without relying on Vercel service role.
-
--- (Contents match supabase/migrations/20260521120000_staff_delete_conversations.sql)
+-- Re-run if delete still fails after the first staff_delete_conversations.sql.
+-- Fixes service-role server deletes (auth.uid() is null on Vercel admin client).
 
 CREATE OR REPLACE FUNCTION public.staff_delete_conversations (
   p_dealership_id uuid,
@@ -47,9 +45,3 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.staff_delete_conversations (uuid, uuid[]) TO authenticated;
-
-DROP POLICY IF EXISTS conversations_delete ON public.conversations;
-
-CREATE POLICY conversations_delete ON public.conversations
-  FOR DELETE TO authenticated
-    USING (public.user_has_dealership_access (dealership_id));

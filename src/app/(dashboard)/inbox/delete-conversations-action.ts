@@ -1,10 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
 import { createSupabaseAdminClient, hasSupabaseServiceRoleKey } from "@/integrations/supabase/admin";
 import { createSupabaseServerClient } from "@/integrations/supabase/server";
-import { requireStaff } from "@/server/auth/staff";
+import { getCurrentStaff } from "@/server/auth/staff";
 import { deleteConversationsPermanently } from "@/server/data/delete-conversations";
 
 export type DeleteConversationsActionState = {
@@ -34,21 +32,23 @@ function parseConversationIds(raw: FormDataEntryValue | null): string[] {
   }
 }
 
-function deleteSetupErrorMessage(): string {
-  return (
-    "Permanent delete is not fully set up on the database yet. In Supabase → SQL Editor, run the migration file supabase/migrations/20260521120000_staff_delete_conversations.sql, then try again. Also add SUPABASE_SERVICE_ROLE_KEY in Vercel if deletes still fail."
-  );
-}
-
 export async function deleteConversationsForeverAction(
   _prev: DeleteConversationsActionState,
   formData: FormData
 ): Promise<DeleteConversationsActionState> {
   try {
-    const staff = await requireStaff();
-    const ids = parseConversationIds(formData.get("conversationIds"));
+    const staff = await getCurrentStaff();
+    if (!staff) {
+      return {
+        ok: false,
+        error: "Your session expired. Sign in again, then retry delete.",
+        deletedCount: 0,
+      };
+    }
 
+    const ids = parseConversationIds(formData.get("conversationIds"));
     const sessionDb = await createSupabaseServerClient();
+
     let res = await deleteConversationsPermanently(
       staff.dealership_id,
       ids,
@@ -65,20 +65,16 @@ export async function deleteConversationsForeverAction(
         res = await deleteConversationsPermanently(
           staff.dealership_id,
           ids,
-          createSupabaseAdminClient()
+          createSupabaseAdminClient(),
+          { preferTableDelete: true }
         );
       }
     }
 
     if (!res.ok) {
-      const message =
-        res.error.code === "FORBIDDEN" ||
-        res.error.message.toLowerCase().includes("policy")
-          ? deleteSetupErrorMessage()
-          : res.error.message;
       return {
         ok: false,
-        error: message,
+        error: res.error.message,
         deletedCount: 0,
       };
     }
@@ -86,13 +82,11 @@ export async function deleteConversationsForeverAction(
     if (res.data.deletedCount === 0) {
       return {
         ok: false,
-        error: deleteSetupErrorMessage(),
+        error:
+          "No conversations were deleted. Refresh the page and try again.",
         deletedCount: 0,
       };
     }
-
-    revalidatePath("/inbox", "page");
-    revalidatePath("/overview", "page");
 
     return {
       ok: true,
@@ -102,14 +96,6 @@ export async function deleteConversationsForeverAction(
   } catch (e) {
     const message =
       e instanceof Error ? e.message : "Could not delete conversations.";
-    if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) {
-      return {
-        ok: false,
-        error: deleteSetupErrorMessage(),
-        deletedCount: 0,
-      };
-    }
-
     return {
       ok: false,
       error: message,
