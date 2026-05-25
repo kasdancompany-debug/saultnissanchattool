@@ -837,6 +837,13 @@ export type Database = {
           updated_at: string;
         };
       };
+      staff_delete_conversations: {
+        Args: {
+          p_dealership_id: string;
+          p_conversation_ids: string[];
+        };
+        Returns: number;
+      };
       set_conversation_status: {
         Args: {
           p_dealership_id: string;

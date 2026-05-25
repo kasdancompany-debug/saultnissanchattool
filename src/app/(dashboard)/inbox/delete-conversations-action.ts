@@ -60,6 +60,12 @@ function parseDeleteReturnHref(formData: FormData): string {
   });
 }
 
+function deleteSetupErrorMessage(): string {
+  return (
+    "Permanent delete is not fully set up on the database yet. In Supabase → SQL Editor, run the migration file supabase/migrations/20260521120000_staff_delete_conversations.sql, then try again. Also add SUPABASE_SERVICE_ROLE_KEY in Vercel if deletes still fail."
+  );
+}
+
 export async function deleteConversationsForeverAction(
   _prev: DeleteConversationsActionState,
   formData: FormData
@@ -70,23 +76,33 @@ export async function deleteConversationsForeverAction(
     const staff = await requireStaff();
     const ids = parseConversationIds(formData.get("conversationIds"));
 
-    let db;
-    if (hasSupabaseServiceRoleKey()) {
-      db = createSupabaseAdminClient();
-    } else {
-      db = await createSupabaseServerClient();
-    }
-
-    const res = await deleteConversationsPermanently(
+    const sessionDb = await createSupabaseServerClient();
+    let res = await deleteConversationsPermanently(
       staff.dealership_id,
       ids,
-      db
+      sessionDb
     );
+
+    if (
+      (!res.ok &&
+        (res.error.code === "FORBIDDEN" ||
+          res.error.message.toLowerCase().includes("policy"))) ||
+      (res.ok && res.data.deletedCount === 0 && ids.length > 0)
+    ) {
+      if (hasSupabaseServiceRoleKey()) {
+        res = await deleteConversationsPermanently(
+          staff.dealership_id,
+          ids,
+          createSupabaseAdminClient()
+        );
+      }
+    }
 
     if (!res.ok) {
       const message =
-        res.error.code === "FORBIDDEN" || res.error.message.includes("policy")
-          ? "You do not have permission to permanently delete conversations. Managers and admins can delete when the server is configured correctly."
+        res.error.code === "FORBIDDEN" ||
+        res.error.message.toLowerCase().includes("policy")
+          ? deleteSetupErrorMessage()
           : res.error.message;
       return {
         ok: false,
@@ -96,17 +112,9 @@ export async function deleteConversationsForeverAction(
     }
 
     if (res.data.deletedCount === 0) {
-      if (!hasSupabaseServiceRoleKey()) {
-        return {
-          ok: false,
-          error:
-            "Delete is not configured on the server (missing SUPABASE_SERVICE_ROLE_KEY in Vercel). Add the Supabase service role key to your Vercel project environment, redeploy, then try again.",
-          deletedCount: 0,
-        };
-      }
       return {
         ok: false,
-        error: "No conversations were deleted. They may already be removed.",
+        error: deleteSetupErrorMessage(),
         deletedCount: 0,
       };
     }
@@ -129,8 +137,7 @@ export async function deleteConversationsForeverAction(
     if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) {
       return {
         ok: false,
-        error:
-          "Delete is not configured on the server (missing SUPABASE_SERVICE_ROLE_KEY in Vercel). Add the Supabase service role key to your Vercel project environment, redeploy, then try again.",
+        error: deleteSetupErrorMessage(),
         deletedCount: 0,
       };
     }
