@@ -1,5 +1,5 @@
 import type { InboxSort } from "@/lib/inbox/inbox-sort";
-import type { InboxFilter } from "@/server/data/inbox";
+import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 import { loadInboxConversationList } from "@/server/inbox/inbox-loaders";
 
 import { ConversationListPanel } from "./conversation-list-panel";

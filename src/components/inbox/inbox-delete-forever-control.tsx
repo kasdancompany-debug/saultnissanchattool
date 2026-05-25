@@ -1,13 +1,9 @@
 "use client";
 
-import { startTransition, useActionState, useEffect, useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 
-import {
-  deleteConversationsForeverAction,
-  deleteConversationsInitialState,
-} from "@/app/(dashboard)/inbox/delete-conversations-action";
 import { markInboxClientRefreshed } from "@/lib/inbox-client-refresh-coord";
 import { buildInboxHref } from "@/components/inbox/inbox-params";
 import type { InboxFilter } from "@/lib/inbox/inbox-filter";
@@ -38,10 +34,8 @@ export function InboxDeleteForeverControl({
 }: Props) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
-  const [state, formAction, isPending] = useActionState(
-    deleteConversationsForeverAction,
-    deleteConversationsInitialState
-  );
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const count = conversationIds.length;
   const disabled = count === 0;
@@ -52,27 +46,47 @@ export function InboxDeleteForeverControl({
     conversationId: null,
   });
 
-  useEffect(() => {
-    if (!state.ok) {
-      return;
-    }
-    setConfirming(false);
-    onDeleted?.();
-    startTransition(() => {
-      if (window.location.search.includes("c=")) {
-        router.replace(listHref);
-      }
-      router.refresh();
-      markInboxClientRefreshed();
-    });
-  }, [state.ok, onDeleted, listHref, router]);
+  const runDelete = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/inbox/delete-conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversationIds }),
+        });
+        const data = (await res.json()) as {
+          ok?: boolean;
+          error?: string | null;
+          deletedCount?: number;
+        };
 
-  const errorAlert = state.error ? (
+        if (!res.ok || !data.ok) {
+          setError(data.error ?? "Could not delete conversations.");
+          return;
+        }
+
+        setConfirming(false);
+        onDeleted?.();
+        if (window.location.search.includes("c=")) {
+          router.replace(listHref);
+        }
+        router.refresh();
+        markInboxClientRefreshed();
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : "Could not delete conversations."
+        );
+      }
+    });
+  };
+
+  const errorAlert = error ? (
     <p
       className="text-destructive w-full text-[11px] font-medium leading-snug"
       role="alert"
     >
-      {state.error}
+      {error}
     </p>
   ) : null;
 
@@ -84,19 +98,7 @@ export function InboxDeleteForeverControl({
             Permanently delete {count === 1 ? "this conversation" : `${count} conversations`}?
             Messages and history cannot be recovered.
           </p>
-          <form action={formAction} className="flex shrink-0 items-center gap-1.5">
-            <input type="hidden" name="filter" value={filter} />
-            <input type="hidden" name="sort" value={sort} />
-            <input
-              type="hidden"
-              name="assigneeScopeUserId"
-              value={assigneeScopeUserId ?? ""}
-            />
-            <input
-              type="hidden"
-              name="conversationIds"
-              value={JSON.stringify(conversationIds)}
-            />
+          <div className="flex shrink-0 items-center gap-1.5">
             <Button
               type="button"
               variant="ghost"
@@ -108,15 +110,16 @@ export function InboxDeleteForeverControl({
               Cancel
             </Button>
             <Button
-              type="submit"
+              type="button"
               variant="destructive"
               size={size}
               className="h-8 gap-1 px-2.5 text-[11px] font-semibold"
               disabled={isPending || disabled}
+              onClick={runDelete}
             >
               {isPending ? "Deleting…" : "Delete forever"}
             </Button>
-          </form>
+          </div>
         </div>
         {errorAlert}
       </div>
@@ -131,7 +134,10 @@ export function InboxDeleteForeverControl({
         size={size}
         className="h-8 gap-1.5 px-2.5 text-[11px] font-semibold"
         disabled={disabled || isPending}
-        onClick={() => setConfirming(true)}
+        onClick={() => {
+          setError(null);
+          setConfirming(true);
+        }}
       >
         <Trash2 className="size-3.5 shrink-0" aria-hidden />
         {label ?? (count === 1 ? "Delete forever" : `Delete forever (${count})`)}
