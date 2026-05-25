@@ -6,8 +6,10 @@ import { cn } from "@/lib/utils";
 
 export function InboxSelectConversationEmpty({
   widgetHref,
+  showAdminSettingsLinks = false,
 }: {
   widgetHref: string;
+  showAdminSettingsLinks?: boolean;
 }) {
   return (
     <div className="from-muted/15 via-background to-background flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center bg-gradient-to-b px-4 py-8 text-center sm:px-8 sm:py-10">
@@ -49,34 +51,48 @@ export function InboxSelectConversationEmpty({
             </span>
             <ArrowRight className="text-muted-foreground size-4 shrink-0 opacity-60" aria-hidden />
           </Link>
-          <Link
-            href="/settings/routing"
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "h-auto justify-start gap-3 py-3 pr-3 pl-3.5 text-left font-normal"
-            )}
-          >
-            <Route className="text-primary size-4 shrink-0" aria-hidden />
-            <span className="min-w-0 flex-1">
-              <span className="text-foreground block text-sm font-medium">Routing &amp; web chat</span>
-              <span className="text-muted-foreground block text-xs">Where chat appears</span>
-            </span>
-            <ArrowRight className="text-muted-foreground size-4 shrink-0 opacity-60" aria-hidden />
-          </Link>
-          <Link
-            href="/settings/team"
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "h-auto justify-start gap-3 py-3 pr-3 pl-3.5 text-left font-normal sm:col-span-2"
-            )}
-          >
-            <Users className="text-primary size-4 shrink-0" aria-hidden />
-            <span className="min-w-0 flex-1">
-              <span className="text-foreground block text-sm font-medium">Team &amp; coverage</span>
-              <span className="text-muted-foreground block text-xs">Who can respond</span>
-            </span>
-            <ArrowRight className="text-muted-foreground size-4 shrink-0 opacity-60" aria-hidden />
-          </Link>
+          {showAdminSettingsLinks ? (
+            <>
+              <Link
+                href="/settings/routing"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "h-auto justify-start gap-3 py-3 pr-3 pl-3.5 text-left font-normal"
+                )}
+              >
+                <Route className="text-primary size-4 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="text-foreground block text-sm font-medium">
+                    Routing &amp; web chat
+                  </span>
+                  <span className="text-muted-foreground block text-xs">Where chat appears</span>
+                </span>
+                <ArrowRight
+                  className="text-muted-foreground size-4 shrink-0 opacity-60"
+                  aria-hidden
+                />
+              </Link>
+              <Link
+                href="/settings/team"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "h-auto justify-start gap-3 py-3 pr-3 pl-3.5 text-left font-normal sm:col-span-2"
+                )}
+              >
+                <Users className="text-primary size-4 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="text-foreground block text-sm font-medium">
+                    Team &amp; coverage
+                  </span>
+                  <span className="text-muted-foreground block text-xs">Who can respond</span>
+                </span>
+                <ArrowRight
+                  className="text-muted-foreground size-4 shrink-0 opacity-60"
+                  aria-hidden
+                />
+              </Link>
+            </>
+          ) : null}
         </div>
       </div>
 

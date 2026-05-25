@@ -19,6 +19,7 @@ import type { InboxFilter } from "@/server/data/inbox";
 import { EMPTY_INBOX_QUEUE_COUNTS } from "@/lib/inbox/compute-queue-counts";
 import { requireStaff } from "@/server/auth/staff";
 import { getInboxQueueCounts } from "@/server/data/inbox-queue-counts";
+import { canAccessDealershipAdminSettings } from "@/lib/auth/dealership-settings-access";
 import { staffCanEditDealershipSettings } from "@/server/settings/staff-privilege";
 
 export async function InboxAuthenticatedView({
@@ -105,7 +106,10 @@ export async function InboxAuthenticatedView({
               />
             </Suspense>
           ) : (
-            <InboxSelectConversationEmpty widgetHref={widgetHref} />
+            <InboxSelectConversationEmpty
+              widgetHref={widgetHref}
+              showAdminSettingsLinks={canAccessDealershipAdminSettings(staff.role)}
+            />
           )}
         </div>
       </InboxPageShell>
