@@ -10,6 +10,7 @@ import { readOpportunityFromMetadata } from "@/lib/opportunity/metadata";
 import { opportunityBandLabel } from "@/lib/opportunity/score-band";
 import {
   aggregateProfileHintsFromTexts,
+  isPlaceholderCustomerName,
   profileFieldsStillMissing,
 } from "@/lib/conversation/extract-profile-hints";
 
@@ -226,29 +227,47 @@ export function buildAiCopilotView(input: {
   const intentSummary =
     aiInsights?.intent ?? input.assist?.intent ?? opportunity.intent_summary;
 
-  const profileNotes = [
-    typeof leadCapture?.summary === "string" ? leadCapture.summary : null,
-    intentSummary ? `Intent: ${intentSummary}` : null,
-    aiInsights?.missing_profile_fields.length
-      ? `Still need: ${aiInsights.missing_profile_fields.join(", ")}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
   const extractedFromChat = aggregateProfileHintsFromTexts(
     input.messages
       .filter((m) => m.sender_type === "customer")
       .map((m) => m.body ?? "")
   );
-  const missingFields =
-    aiInsights?.missing_profile_fields ??
-    profileFieldsStillMissing({
-      displayName: input.customerDisplayName,
-      email: input.customerEmail,
-      phoneE164: input.customerPhoneE164,
-      extracted: extractedFromChat,
-    });
+
+  const effectiveDisplayName =
+    extractedFromChat.name?.trim() ||
+    (!isPlaceholderCustomerName(input.customerDisplayName)
+      ? input.customerDisplayName.trim()
+      : null) ||
+    input.customerDisplayName;
+
+  const effectivePhoneE164 =
+    extractedFromChat.phoneE164?.trim() ||
+    input.customerPhoneE164?.trim() ||
+    aiInsights?.customer_profile.phone_e164?.trim() ||
+    null;
+
+  const effectiveEmail =
+    extractedFromChat.email?.trim() ||
+    input.customerEmail?.trim() ||
+    aiInsights?.customer_profile.email?.trim() ||
+    null;
+
+  const missingFields = profileFieldsStillMissing({
+    displayName: effectiveDisplayName,
+    email: effectiveEmail,
+    phoneE164: effectivePhoneE164,
+    extracted: extractedFromChat,
+  });
+
+  const profileNotes = [
+    typeof leadCapture?.summary === "string" ? leadCapture.summary : null,
+    intentSummary ? `Intent: ${intentSummary}` : null,
+    missingFields.length
+      ? `Still need: ${missingFields.join(", ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const primaryDraft =
     input.assist?.safeDraftReply.trim() ||
@@ -271,13 +290,9 @@ export function buildAiCopilotView(input: {
     nextActions: buildNextActions(input.assist, customerText, input.hasAssignee),
     suggestedResponses: buildSuggestedResponses(input.assist, customerText),
     customerProfile: {
-      displayName: input.customerDisplayName,
-      email:
-        input.customerEmail ?? aiInsights?.customer_profile.email ?? null,
-      phoneE164:
-        input.customerPhoneE164 ??
-        aiInsights?.customer_profile.phone_e164 ??
-        null,
+      displayName: effectiveDisplayName,
+      email: effectiveEmail,
+      phoneE164: effectivePhoneE164,
       notes: profileNotes || null,
       missingFields,
     },

@@ -99,7 +99,8 @@ function resolveEffectiveContact(ctx: WidgetReplyContext): {
   const phoneDisplay = formatPhoneForDisplay(phoneE164);
   const hasName = Boolean(name);
   const hasPhone = Boolean(phoneE164);
-  const contactComplete = ctx.missingAfterHints.length === 0;
+  /** Contact for callbacks is name + phone; email is optional and not gated here. */
+  const contactComplete = hasName && hasPhone;
   return { name, phoneE164, first, phoneDisplay, hasName, hasPhone, contactComplete };
 }
 

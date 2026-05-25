@@ -105,7 +105,7 @@ export async function syncCustomerProfileFromInboundMessage(
   }
 
   if (Object.keys(patch).length > 0) {
-    await updateCustomerProfile(
+    const updated = await updateCustomerProfile(
       {
         dealershipId,
         customerId,
@@ -113,6 +113,13 @@ export async function syncCustomerProfileFromInboundMessage(
       },
       db
     );
+    if (!updated.ok) {
+      console.error(
+        "[sync] updateCustomerProfile failed",
+        conversationId,
+        updated.error
+      );
+    }
   }
 
   const resolvedName =

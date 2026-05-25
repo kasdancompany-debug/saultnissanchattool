@@ -16,6 +16,7 @@ import { buildAiCopilotView } from "@/server/inbox/build-ai-copilot-view";
 import type { AiAssistPanelView } from "@/types/ai-assist-panel";
 import type { AiCopilotView } from "@/types/ai-copilot";
 import { resolveConversationHandlingMode } from "@/lib/conversation/control-metadata";
+import { isPlaceholderCustomerName } from "@/lib/conversation/extract-profile-hints";
 import { isAfterHoursWebChatIntake } from "@/lib/conversation/widget-metadata";
 import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 import {
@@ -471,8 +472,9 @@ export function getCustomerDisplayName(
   customer: InboxConversationListItem["customers"],
   fallbackTitle: string | null
 ): string {
-  if (customer?.display_name?.trim()) {
-    return customer.display_name.trim();
+  const display = customer?.display_name?.trim();
+  if (display && !isPlaceholderCustomerName(display)) {
+    return display;
   }
   if (customer?.phone_e164) {
     return customer.phone_e164;

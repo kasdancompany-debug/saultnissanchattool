@@ -29,10 +29,12 @@ import { runWidgetAssistantReply } from "@/server/widget/run-widget-assistant-re
 import { buildContextualWidgetReply } from "@/server/widget/widget-contextual-reply";
 import {
   aggregateProfileHintsFromTexts,
+  contactFieldsStillMissing,
   extractProfileHintsFromText,
+  isPlaceholderCustomerName,
   mergeExtractedCustomerProfile,
-  profileFieldsStillMissing,
 } from "@/lib/conversation/extract-profile-hints";
+import { syncCustomerProfileFromInboundMessage } from "@/server/conversation/sync-customer-profile-from-inbound";
 import { readWidgetIntakeIntent } from "@/lib/conversation/widget-metadata";
 import { createMessage, getMessagesForConversation } from "@/server/data/messages";
 import { webChatInboundAdapter } from "@/server/inbox/adapters/web-chat.adapter";
@@ -625,14 +627,18 @@ async function ensureWebChatAssistantReply(job: WidgetInboundAiJob): Promise<voi
     department: job.conversationDepartment,
     topic: readWidgetIntakeIntent(conv.data.metadata),
     hints: merged,
-    missingAfterHints: profileFieldsStillMissing({
+    missingAfterHints: contactFieldsStillMissing({
       displayName: customerKnown?.display_name,
-      email: customerKnown?.email,
       phoneE164: customerKnown?.phone_e164,
       extracted: merged,
     }),
-    knownDisplayName: customerKnown?.display_name,
-    knownPhoneE164: customerKnown?.phone_e164,
+    knownDisplayName:
+      merged.name?.trim() ||
+      (!isPlaceholderCustomerName(customerKnown?.display_name)
+        ? customerKnown?.display_name
+        : null),
+    knownPhoneE164:
+      merged.phoneE164?.trim() || customerKnown?.phone_e164,
     lastAssistantMessage,
   });
 
@@ -658,6 +664,17 @@ export async function runWidgetInboundAi(
 ): Promise<WidgetPublicMessage | null> {
   const supabase = createSupabaseAdminClient();
   await ensureWidgetAiEnabledForReply(job, supabase);
+
+  if (job.channel === "web_chat") {
+    await syncCustomerProfileFromInboundMessage(
+      {
+        dealershipId: job.dealershipId,
+        conversationId: job.conversationId,
+        latestCustomerText: job.customerMessageBody,
+      },
+      supabase
+    );
+  }
 
   const direct = await runWidgetAssistantReply(job);
   if (direct) {

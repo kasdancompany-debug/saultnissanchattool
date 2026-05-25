@@ -5,10 +5,12 @@ import { isWebChatAutomatedTriageUnblocked } from "@/lib/conversation/control-me
 import { readWidgetIntakeIntent } from "@/lib/conversation/widget-metadata";
 import {
   aggregateProfileHintsFromTexts,
+  contactFieldsStillMissing,
   extractProfileHintsFromText,
+  isPlaceholderCustomerName,
   mergeExtractedCustomerProfile,
-  profileFieldsStillMissing,
 } from "@/lib/conversation/extract-profile-hints";
+import { syncCustomerProfileFromInboundMessage } from "@/server/conversation/sync-customer-profile-from-inbound";
 import { getInboundClassificationEnv } from "@/lib/env/inbound-classification-config";
 import { getConversationRowById } from "@/server/data/conversations";
 import { getCustomerById } from "@/server/data/customers";
@@ -64,8 +66,22 @@ function buildTranscript(
 }
 
 function orderMissing(fields: string[]): string[] {
-  const priority = ["phone", "name", "email"] as const;
+  const priority = ["phone", "name"] as const;
   return priority.filter((f) => fields.includes(f));
+}
+
+function formatPhoneForPrompt(phoneE164: string | null | undefined): string | null {
+  const raw = phoneE164?.trim();
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) {
+    const d = digits.slice(1);
+    return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+  }
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return raw;
 }
 
 /**
@@ -95,6 +111,15 @@ export async function runWidgetAssistantReply(
   ) {
     return null;
   }
+
+  await syncCustomerProfileFromInboundMessage(
+    {
+      dealershipId: job.dealershipId,
+      conversationId: job.conversationId,
+      latestCustomerText: job.customerMessageBody,
+    },
+    supabase
+  );
 
   const existing = await getMessagesForConversation(
     job.dealershipId,
@@ -153,14 +178,23 @@ export async function runWidgetAssistantReply(
     fromModel: threadHints,
     fromHeuristics: latestHints,
   });
-  const missingAfterHints = orderMissing(
-    profileFieldsStillMissing({
+  const missingContact = orderMissing(
+    contactFieldsStillMissing({
       displayName: customerKnown?.display_name,
-      email: customerKnown?.email,
       phoneE164: customerKnown?.phone_e164,
       extracted: merged,
     })
   );
+
+  const knownName =
+    merged.name?.trim() ||
+    (!isPlaceholderCustomerName(customerKnown?.display_name)
+      ? customerKnown?.display_name?.trim()
+      : null) ||
+    null;
+  const knownPhone =
+    merged.phoneE164?.trim() || customerKnown?.phone_e164?.trim() || null;
+  const knownPhoneDisplay = formatPhoneForPrompt(knownPhone);
 
   let replyText = buildContextualWidgetReply({
     customerMessage: job.customerMessageBody,
@@ -168,9 +202,9 @@ export async function runWidgetAssistantReply(
     department: job.conversationDepartment,
     topic,
     hints: merged,
-    missingAfterHints,
-    knownDisplayName: customerKnown?.display_name,
-    knownPhoneE164: customerKnown?.phone_e164,
+    missingAfterHints: missingContact,
+    knownDisplayName: knownName ?? customerKnown?.display_name,
+    knownPhoneE164: knownPhone ?? customerKnown?.phone_e164,
     lastAssistantMessage,
   });
   let replySource: "heuristic" | "llm" = "heuristic";
@@ -185,9 +219,9 @@ export async function runWidgetAssistantReply(
       : "";
 
     const contactNote =
-      missingAfterHints.length === 0
-        ? "Customer already provided name and phone in this message or thread — thank them and move the conversation forward (appointment timing, vehicle details, etc.). Do NOT ask for name or phone again."
-        : `Still need: ${missingAfterHints.join(", ")}. Ask naturally; prefer phone first.`;
+      missingContact.length === 0
+        ? `Customer contact on file${knownName ? `: ${knownName}` : ""}${knownPhoneDisplay ? `, ${knownPhoneDisplay}` : ""}. Use their first name when appropriate. Thank them and move forward (appointment timing, vehicle details, etc.). Do NOT ask for name or phone again.`
+        : `Still need: ${missingContact.join(", ")}. Ask naturally; prefer phone first.`;
 
     const completion = await openaiWithTimeout({
       model,

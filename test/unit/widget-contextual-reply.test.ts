@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { buildContextualWidgetReply } from "@/server/widget/widget-contextual-reply";
 import { extractProfileHintsFromText } from "@/lib/conversation/extract-profile-hints";
 import {
+  contactFieldsStillMissing,
   mergeExtractedCustomerProfile,
-  profileFieldsStillMissing,
 } from "@/lib/conversation/extract-profile-hints";
 
 describe("buildContextualWidgetReply", () => {
@@ -16,9 +16,8 @@ describe("buildContextualWidgetReply", () => {
       fromModel: { name: null, email: null, phoneE164: null },
       fromHeuristics: hints,
     });
-    const missing = profileFieldsStillMissing({
+    const missing = contactFieldsStillMissing({
       displayName: null,
-      email: null,
       phoneE164: null,
       extracted: merged,
     });

@@ -31,4 +31,15 @@ describe("profile extraction for widget → inbox sync", () => {
     expect(h.name?.toLowerCase()).toContain("billy");
     expect(h.phoneE164).toBeTruthy();
   });
+
+  it("parses Gary Phillips on one line with phone", () => {
+    const h = extractProfileHintsFromText("Gary Phillips 705-206-3669");
+    expect(h.name?.toLowerCase()).toContain("gary");
+    expect(h.phoneE164).toBeTruthy();
+  });
+
+  it("parses phone after call me at", () => {
+    const h = extractProfileHintsFromText("call me at 705-206-3669");
+    expect(h.phoneE164).toBeTruthy();
+  });
 });
