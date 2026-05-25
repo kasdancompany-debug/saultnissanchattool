@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { StaffRole } from "@/integrations/supabase/database.types";
 import type { InboxSort } from "@/lib/inbox/inbox-sort";
+import type { InboxQueueCounts } from "@/lib/inbox/compute-queue-counts";
 import type { InboxFilter } from "@/server/data/inbox";
 
 import { InboxTopChrome } from "./inbox-top-chrome";
@@ -15,6 +16,7 @@ export function InboxPageShell({
   assigneeScopeUserId,
   selectedConversationId,
   sort,
+  initialQueueCounts,
   children,
 }: {
   dealershipId: string;
@@ -24,6 +26,7 @@ export function InboxPageShell({
   assigneeScopeUserId: string | null;
   selectedConversationId: string | null;
   sort: InboxSort;
+  initialQueueCounts?: InboxQueueCounts;
   children: ReactNode;
 }) {
   return (
@@ -58,6 +61,7 @@ export function InboxPageShell({
         selectedConversationId={selectedConversationId}
         staffUserId={staffUserId}
         staffRole={staffRole}
+        initialQueueCounts={initialQueueCounts}
       />
 
       {children}

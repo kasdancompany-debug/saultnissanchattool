@@ -41,6 +41,8 @@ export type CreateConversationInput = {
   /** When true, allows inbound AI triage + widget auto-replies per policy. Omit to use DB default (false). */
   aiEnabled?: boolean;
   metadata?: Database["public"]["Tables"]["conversations"]["Insert"]["metadata"];
+  /** Overrides default AI control patch (e.g. widget autopilot). */
+  controlPatch?: Record<string, unknown>;
 };
 
 /** Typed filter for listing conversations (dealership-scoped). */
@@ -179,7 +181,7 @@ export async function createConversation(
     ...(input.aiEnabled === undefined ? {} : { ai_enabled: input.aiEnabled }),
     metadata: mergeConversationControl(
       (input.metadata ?? {}) as Json,
-      defaultAiLeadControl()
+      input.controlPatch ?? defaultAiLeadControl()
     ),
   };
 

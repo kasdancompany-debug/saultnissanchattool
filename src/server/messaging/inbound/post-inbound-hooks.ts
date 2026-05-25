@@ -3,6 +3,7 @@ import "server-only";
 import type { TypedSupabaseClient } from "@/server/db/server-client";
 import { getConversationRowById } from "@/server/data/conversations";
 import { scheduleInboundClassification } from "@/server/ai/run-inbound-classification";
+import { syncCustomerProfileFromInboundMessage } from "@/server/conversation/sync-customer-profile-from-inbound";
 import { tryApplyMissedCallDepartmentReply } from "@/server/telephony/missed-call-inbound-hook";
 
 import type { NormalizedInboundMessage } from "./normalized-inbound-message";
@@ -31,7 +32,19 @@ export async function runPostInboundMessageHooks(input: {
     input.conversationId,
     input.db
   );
-  if (conv.ok) {
+
+  if (conv.ok && conv.data.channel === "web_chat") {
+    await syncCustomerProfileFromInboundMessage(
+      {
+        dealershipId: input.dealershipId,
+        conversationId: input.conversationId,
+        latestCustomerText: input.normalized.text,
+      },
+      input.db
+    );
+  }
+
+  if (conv.ok && conv.data.channel !== "web_chat") {
     scheduleInboundClassification({
       dealershipId: input.dealershipId,
       conversationId: input.conversationId,

@@ -15,7 +15,7 @@ import {
   formatTimezoneShortLabel,
 } from "@/lib/business-hours";
 import type { BusinessHoursConfigV1 } from "@/lib/business-hours/types";
-import { publicEnv } from "@/lib/env/public";
+import { getClientPublicEnv } from "@/lib/env/client-public-env";
 import { inferDepartmentFromPagePath } from "@/lib/widget/infer-department";
 import {
   clearWidgetSession,
@@ -33,14 +33,33 @@ import {
   mergeWidgetBrand,
   type WidgetBrandTokens,
 } from "@/components/widget/widget-brand";
+import { getWidgetTopicWelcome } from "@/lib/widget/build-intent-opener";
 import { WidgetLeadIntake } from "@/components/widget/lead-capture/widget-lead-intake";
 import { WidgetPremiumLauncher } from "@/components/widget/widget-premium-launcher";
 import type { LeadIntent } from "@/lib/widget/lead-capture/types";
-import type { WidgetLeadCapturePayload } from "@/lib/widget/lead-capture/types";
 
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 8000;
+
+function hasAiReplyAfterLastCustomer(msgs: WidgetPublicMessage[]): boolean {
+  let lastCustomer = -1;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i]?.sender === "customer") {
+      lastCustomer = i;
+      break;
+    }
+  }
+  if (lastCustomer < 0) {
+    return false;
+  }
+  for (let i = lastCustomer + 1; i < msgs.length; i++) {
+    if (msgs[i]?.sender === "ai") {
+      return true;
+    }
+  }
+  return false;
+}
 
 const DEFAULT_WELCOME =
   "Thanks for visiting. How can we help you find your next vehicle or service today?";
@@ -61,6 +80,8 @@ export type DealerChatWidgetProps = {
    * inbound AI is skipped when `OPENAI_API_KEY` is missing or invalid.
    */
   openAiConfigured?: boolean;
+  /** Full-page preview (`/widget`) vs floating embed on a dealer site. */
+  presentation?: "embed" | "page";
 };
 
 /**
@@ -74,9 +95,11 @@ export function DealerChatWidget({
   brand: brandPartial,
   defaultOpen = false,
   openAiConfigured = true,
+  presentation = "embed",
 }: DealerChatWidgetProps) {
+  const isPage = presentation === "page";
   const brand = useMemo(() => mergeWidgetBrand(brandPartial), [brandPartial]);
-  const env = publicEnv;
+  const env = useMemo(() => getClientPublicEnv(), []);
   const titleId = useId();
   const panelId = useId();
   const launcherId = useId();
@@ -92,8 +115,15 @@ export function DealerChatWidget({
   const [hydrating, setHydrating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<"intake" | "chat">("intake");
-  const [pendingIntent, setPendingIntent] = useState<LeadIntent | null>(null);
   const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [activeTopic, setActiveTopic] = useState<{
+    intent: LeadIntent;
+    title: string;
+  } | null>(null);
+  const [awaitingAiReply, setAwaitingAiReply] = useState(false);
+  const [buildLabel, setBuildLabel] = useState<string | null>(null);
+  const [hasStoredSession, setHasStoredSession] = useState(false);
+  const [widgetApiOk, setWidgetApiOk] = useState<boolean | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const launcherBtnRef = useRef<HTMLButtonElement>(null);
@@ -124,26 +154,56 @@ export function DealerChatWidget({
     [brand.primary, brand.primaryHover]
   );
 
-  useEffect(() => {
-    const isLocalDevHost =
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1";
-    if (process.env.NODE_ENV === "development" && isLocalDevHost) {
-      // Embedded/local dev browsers can report navigator.onLine=false even while requests work.
-      setOnline(true);
-      return;
-    }
+  const widgetApiOrigin = useMemo(() => {
+    const base =
+      env.NEXT_PUBLIC_WIDGET_API_ORIGIN?.trim() || env.NEXT_PUBLIC_APP_URL;
+    return base.replace(/\/$/, "");
+  }, [env.NEXT_PUBLIC_APP_URL, env.NEXT_PUBLIC_WIDGET_API_ORIGIN]);
 
-    setOnline(navigator.onLine);
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => {
-      window.removeEventListener("online", on);
-      window.removeEventListener("offline", off);
+  const probeWidgetServer = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await fetch(`${widgetApiOrigin}/api/widget/conversations`, {
+        method: "OPTIONS",
+      });
+      return res.ok || res.status === 204 || res.status === 200;
+    } catch {
+      return false;
+    }
+  }, [widgetApiOrigin]);
+
+  const applyConnectivityFromApi = useCallback(
+    (result: { ok: boolean; code?: string }) => {
+      if (result.ok) {
+        setOnline(true);
+        return;
+      }
+      if (result.code === "NETWORK") {
+        setOnline(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const runProbe = async () => {
+      const reachable = await probeWidgetServer();
+      if (cancelled) {
+        return;
+      }
+      setWidgetApiOk(reachable);
+      setOnline(reachable || navigator.onLine);
     };
-  }, []);
+    void runProbe();
+    const interval = window.setInterval(() => void runProbe(), 60_000);
+    const onBrowserOnline = () => void runProbe();
+    window.addEventListener("online", onBrowserOnline);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("online", onBrowserOnline);
+    };
+  }, [probeWidgetServer]);
 
   useEffect(() => {
     const tick = () => {
@@ -183,6 +243,7 @@ export function DealerChatWidget({
         tok.conversationId,
         tok.sessionToken
       );
+      applyConnectivityFromApi(res);
       if (!res.ok) {
         if (res.code === "UNAUTHORIZED" || res.code === "NOT_FOUND") {
           clearWidgetSession(dealershipSlug);
@@ -191,9 +252,15 @@ export function DealerChatWidget({
         }
         return;
       }
-      setMessages((m) => mergeById(m, res.messages));
+      setMessages((m) => {
+        const merged = mergeById(m, res.messages);
+        if (awaitingAiReply && hasAiReplyAfterLastCustomer(merged)) {
+          setAwaitingAiReply(false);
+        }
+        return merged;
+      });
     },
-    [dealershipSlug, env, mergeById]
+    [applyConnectivityFromApi, awaitingAiReply, dealershipSlug, env, mergeById]
   );
 
   /** Inbound AI runs after POST returns; poll briefly so async replies show without waiting 8s. */
@@ -208,9 +275,13 @@ export function DealerChatWidget({
       const id = setInterval(() => {
         n += 1;
         void refreshMessages(tok);
-        if (n >= 8) {
+        if (n >= 45) {
           clearInterval(id);
           aiReplyPollRef.current = null;
+          setAwaitingAiReply(false);
+          setError(
+            "The assistant didn't reply in time. Choose another topic to start a fresh chat, or call the dealership."
+          );
         }
       }, 1000);
       aiReplyPollRef.current = id;
@@ -230,32 +301,45 @@ export function DealerChatWidget({
   }, [session, open, refreshMessages]);
 
   useEffect(() => {
+    const base =
+      env.NEXT_PUBLIC_WIDGET_API_ORIGIN?.trim() || env.NEXT_PUBLIC_APP_URL;
+    const origin = base.replace(/\/$/, "");
+    void fetch(`${origin}/api/widget/version`)
+      .then((r) => r.json())
+      .then((d: { widget_version?: string }) => {
+        if (d.widget_version) {
+          setBuildLabel(d.widget_version);
+        }
+      })
+      .catch(() => {});
+  }, [env.NEXT_PUBLIC_APP_URL, env.NEXT_PUBLIC_WIDGET_API_ORIGIN]);
+
+  useEffect(() => {
     if (!open) {
       return;
     }
     const stored = loadWidgetSession(dealershipSlug);
+    setHasStoredSession(Boolean(stored));
+    setSession(null);
+    setMessages([]);
+    setActiveTopic(null);
+    setHydrating(false);
+    setPhase("intake");
+    setError(null);
+  }, [open, dealershipSlug]);
+
+  const continueLastChat = useCallback(async () => {
+    const stored = loadWidgetSession(dealershipSlug);
     if (!stored) {
-      setSession(null);
-      setMessages([]);
-      setHydrating(false);
-      setPhase("intake");
       return;
     }
     setSession(stored);
     setPhase("chat");
-    let cancelled = false;
-    (async () => {
-      setHydrating(true);
-      setError(null);
-      await refreshMessages(stored);
-      if (!cancelled) {
-        setHydrating(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, dealershipSlug, refreshMessages]);
+    setHydrating(true);
+    setError(null);
+    await refreshMessages(stored);
+    setHydrating(false);
+  }, [dealershipSlug, refreshMessages]);
 
   useEffect(() => {
     if (!open || !session) {
@@ -292,9 +376,12 @@ export function DealerChatWidget({
       launcherBtnRef.current?.focus();
       return;
     }
+    if (phase !== "chat") {
+      return;
+    }
     const t = window.setTimeout(() => composerRef.current?.focus(), 100);
     return () => window.clearTimeout(t);
-  }, [open]);
+  }, [open, phase]);
 
   useEffect(() => {
     if (!open) {
@@ -309,32 +396,25 @@ export function DealerChatWidget({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const openWithIntent = useCallback(
-    (intent: LeadIntent) => {
-      const stored = loadWidgetSession(dealershipSlug);
-      if (!stored) {
-        setPendingIntent(intent);
-        setPhase("intake");
-        setSession(null);
-        setMessages([]);
-      }
-      setOpen(true);
-    },
-    [dealershipSlug]
-  );
-
-  const completeLeadIntake = useCallback(
-    async (lead: WidgetLeadCapturePayload) => {
+  const beginChatFromIntent = useCallback(
+    async (intent: LeadIntent, cardTitle: string, initialText?: string) => {
       setLeadSubmitting(true);
       setError(null);
+      clearWidgetSession(dealershipSlug);
       try {
         const started = await widgetStartConversation(env, {
           dealership_slug: dealershipSlug,
           page_path: pagePath,
-          lead_capture: lead as unknown as Record<string, unknown>,
+          widget_intent: intent,
         });
+        applyConnectivityFromApi(started);
         if (!started.ok) {
-          setError(started.message);
+          const msg =
+            started.code === "NOT_CONFIGURED" ||
+            /not configured/i.test(started.message)
+              ? "Chat is not available on the server yet. Please call the dealership or try again in a few minutes."
+              : started.message;
+          setError(msg);
           return;
         }
         const record: WidgetSessionRecord = {
@@ -345,13 +425,22 @@ export function DealerChatWidget({
         };
         saveWidgetSession(record);
         setSession(record);
-        await refreshMessages(record);
+        setMessages([]);
         setPhase("chat");
+
+        const typed = initialText?.trim();
+        if (typed) {
+          setActiveTopic(null);
+          setInput(typed);
+        } else {
+          setActiveTopic({ intent, title: cardTitle });
+          setInput("");
+        }
       } finally {
         setLeadSubmitting(false);
       }
     },
-    [dealershipSlug, env, pagePath, refreshMessages]
+    [applyConnectivityFromApi, dealershipSlug, env, pagePath]
   );
 
   const ensureSession = useCallback(async (): Promise<WidgetSessionRecord | null> => {
@@ -364,6 +453,7 @@ export function DealerChatWidget({
       dealership_slug: dealershipSlug,
       page_path: pagePath,
     });
+    applyConnectivityFromApi(started);
     if (!started.ok) {
       setError(started.message);
       return null;
@@ -377,11 +467,11 @@ export function DealerChatWidget({
     saveWidgetSession(record);
     setSession(record);
     return record;
-  }, [dealershipSlug, env, pagePath]);
+  }, [applyConnectivityFromApi, dealershipSlug, env, pagePath]);
 
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || loading || !online) {
+    if (!text || loading) {
       return;
     }
     setLoading(true);
@@ -402,6 +492,7 @@ export function DealerChatWidget({
         tok.sessionToken,
         text
       );
+      applyConnectivityFromApi(res);
       if (!res.ok) {
         if (res.code === "UNAUTHORIZED") {
           clearWidgetSession(dealershipSlug);
@@ -414,21 +505,28 @@ export function DealerChatWidget({
               again.sessionToken,
               text
             );
+            applyConnectivityFromApi(retry);
             if (!retry.ok) {
               setError(retry.message);
             } else {
+              setActiveTopic(null);
               setInput("");
-              setMessages((m) =>
-                mergeById(m, [
-                  {
-                    id: retry.id,
-                    body: text,
-                    created_at: retry.created_at,
-                    sender: "customer",
-                  },
-                ])
-              );
-              refreshForAsyncAi(again);
+              const bubbles: WidgetPublicMessage[] = [
+                {
+                  id: retry.id,
+                  body: text,
+                  created_at: retry.created_at,
+                  sender: "customer",
+                },
+              ];
+              if (retry.assistant_message) {
+                bubbles.push(retry.assistant_message);
+                setAwaitingAiReply(false);
+              } else {
+                setAwaitingAiReply(true);
+                refreshForAsyncAi(again);
+              }
+              setMessages((m) => mergeById(m, bubbles));
             }
           }
         } else {
@@ -438,25 +536,32 @@ export function DealerChatWidget({
         return;
       }
 
+      setActiveTopic(null);
       setInput("");
-      setMessages((m) =>
-        mergeById(m, [
-          {
-            id: res.id,
-            body: text,
-            created_at: res.created_at,
-            sender: "customer",
-          },
-        ])
-      );
-      refreshForAsyncAi(tok);
+      setError(null);
+      const bubbles: WidgetPublicMessage[] = [
+        {
+          id: res.id,
+          body: text,
+          created_at: res.created_at,
+          sender: "customer",
+        },
+      ];
+      if (res.assistant_message) {
+        bubbles.push(res.assistant_message);
+        setAwaitingAiReply(false);
+      } else {
+        setAwaitingAiReply(true);
+        refreshForAsyncAi(tok);
+      }
+      setMessages((m) => mergeById(m, bubbles));
     } finally {
       setLoading(false);
     }
   }, [
+    applyConnectivityFromApi,
     input,
     loading,
-    online,
     session,
     dealershipSlug,
     ensureSession,
@@ -467,7 +572,7 @@ export function DealerChatWidget({
 
   const statusLabel = useMemo(() => {
     if (!online) {
-      return "Offline";
+      return "No connection";
     }
     if (!withinLiveHours) {
       return "Closed";
@@ -495,49 +600,96 @@ export function DealerChatWidget({
   const hasThread = messages.length > 0;
   const showWelcomeCard = !hasThread && !hydrating && phase === "chat";
 
+  const rootClassName = cn(
+    "widget-root isolate z-[2147483646] flex flex-col",
+    isPage
+      ? "pointer-events-auto min-h-[100dvh] items-center justify-center p-4 sm:p-6"
+      : cn(
+          "fixed right-0 bottom-0 items-end p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] sm:p-4 sm:pb-[max(1rem,env(safe-area-inset-bottom))]",
+          open ? "pointer-events-auto" : "pointer-events-none"
+        )
+  );
+
+  const embedShellClassName =
+    "pointer-events-auto relative flex w-[min(100vw-1.25rem,400px)] flex-col items-stretch";
+
+  const chatPanelClassName = cn(
+    "pointer-events-auto flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0f1a] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.65)]",
+    isPage
+      ? "max-h-[min(92dvh,720px)] w-full max-w-[420px]"
+      : "max-h-[min(560px,calc(100dvh-5.5rem))] w-[min(100vw-1.25rem,400px)] transition-[opacity,transform] duration-200 ease-out",
+    !isPage &&
+      (open ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2 opacity-0")
+  );
+
+  const configBanner =
+    widgetApiOk === false ? (
+      <div
+        className="pointer-events-auto mb-2 max-w-[min(100vw-1.25rem,400px)] rounded-lg border border-amber-500/40 bg-amber-950/90 px-3 py-2 text-[12px] leading-snug text-amber-50"
+        role="alert"
+      >
+        Chat server is not fully configured. Conversations cannot be saved until{" "}
+        <code className="text-[11px]">WIDGET_SESSION_SECRET</code> is set on Vercel (see docs).
+      </div>
+    ) : !openAiConfigured ? (
+      <div
+        className="pointer-events-auto mb-2 max-w-[min(100vw-1.25rem,400px)] rounded-lg border border-rose-500/35 bg-rose-950/80 px-3 py-2 text-[12px] leading-snug text-rose-100"
+        role="status"
+      >
+        AI replies are off — add <code className="text-[11px]">OPENAI_API_KEY</code> on the server
+        and redeploy.
+      </div>
+    ) : null;
+
   if (open && phase === "intake" && !session) {
     return (
-      <div
-        className="widget-root pointer-events-none fixed right-0 bottom-0 z-[100] flex flex-col items-end p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] sm:p-4 sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
-        style={cssVars}
-      >
+      <div className={rootClassName} style={cssVars}>
+        <div className={cn(!isPage && embedShellClassName)}>
+          {configBanner}
         <WidgetLeadIntake
           brandTitle={brand.title}
           onClose={() => setOpen(false)}
-          onComplete={(lead) => void completeLeadIntake(lead)}
-          submitting={leadSubmitting}
-          initialIntent={pendingIntent}
-          onInitialIntentConsumed={() => setPendingIntent(null)}
+          onBeginChat={(intent, title, text) => void beginChatFromIntent(intent, title, text)}
+          onContinueChat={() => void continueLastChat()}
+          canContinueChat={hasStoredSession}
+          starting={leadSubmitting}
+          presentation={presentation}
+          error={error}
+          buildLabel={buildLabel}
         />
-        <WidgetPremiumLauncher
-          open={open}
-          panelId={panelId}
-          launcherId={launcherId}
-          launcherBtnRef={launcherBtnRef}
-          onToggle={() => setOpen((o) => !o)}
-          onSelectIntent={openWithIntent}
-        />
+        </div>
+        {!isPage ? (
+          <WidgetPremiumLauncher
+            open={open}
+            panelId={panelId}
+            launcherId={launcherId}
+            launcherBtnRef={launcherBtnRef}
+            onToggle={() => {
+              setOpen((wasOpen) => {
+                if (!wasOpen) {
+                  setPhase("intake");
+                  setError(null);
+                }
+                return !wasOpen;
+              });
+            }}
+          />
+        ) : null}
       </div>
     );
   }
 
   return (
-    <div
-      className="widget-root pointer-events-none fixed right-0 bottom-0 z-[100] flex flex-col items-end p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] sm:p-4 sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
-      style={cssVars}
-    >
-      <div
-        id={panelId}
+    <div className={rootClassName} style={cssVars}>
+      <div className={cn(!isPage && embedShellClassName)}>
+        {configBanner}
+        <div
+          id={panelId}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={cn(
-          "pointer-events-auto flex max-h-[min(560px,calc(100dvh-5.5rem))] w-[min(100vw-1.25rem,400px)] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0f1a] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.65)] transition-[opacity,transform] duration-200 ease-out",
-          open
-            ? "translate-y-0 opacity-100"
-            : "pointer-events-none translate-y-2 opacity-0"
-        )}
-        aria-hidden={!open}
+        className={chatPanelClassName}
+        aria-hidden={!isPage && !open}
       >
         <header
           className="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-800/80 px-4 py-3.5 text-white"
@@ -584,7 +736,7 @@ export function DealerChatWidget({
           </button>
         </header>
 
-        {process.env.NODE_ENV === "development" && !openAiConfigured ? (
+        {!openAiConfigured ? (
           <div
             className="border-b border-rose-300 bg-rose-50 px-4 py-2.5 text-xs text-rose-950 dark:border-rose-900/60 dark:bg-rose-950/50 dark:text-rose-100"
             role="status"
@@ -603,7 +755,8 @@ export function DealerChatWidget({
           <div className="border-b border-amber-200/80 bg-amber-50 px-4 py-2.5 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
             <span className="inline-flex items-center gap-1.5 font-medium">
               <WifiOff className="size-3.5 shrink-0" aria-hidden />
-              You&apos;re offline. Messages will send when you reconnect.
+              Can&apos;t reach the chat server right now. You can still type — we&apos;ll
+              retry when you send.
             </span>
           </div>
         ) : null}
@@ -621,7 +774,7 @@ export function DealerChatWidget({
 
         <div
           ref={listRef}
-          className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-5 py-5"
+          className="widget-scroll-thin flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-5 py-5"
           role="log"
           aria-live="polite"
           aria-busy={hydrating}
@@ -632,7 +785,13 @@ export function DealerChatWidget({
             </p>
           ) : null}
 
-          {showWelcomeCard ? (
+          {showWelcomeCard && activeTopic ? (
+            <TopicWelcomeBubble
+              topicTitle={activeTopic.title}
+              body={getWidgetTopicWelcome(activeTopic.intent)}
+              brandTitle={brand.title}
+            />
+          ) : showWelcomeCard ? (
             <WelcomeCard
               withinLiveHours={withinLiveHours}
               online={online}
@@ -645,6 +804,12 @@ export function DealerChatWidget({
                 <MessageBubble key={m.id} message={m} brandTitle={brand.title} />
               ))
             : null}
+
+          {awaitingAiReply && !hasAiReplyAfterLastCustomer(messages) ? (
+            <p className="px-1 text-[12px] text-zinc-400" role="status">
+              Assistant is replying…
+            </p>
+          ) : null}
         </div>
 
         {error ? (
@@ -694,13 +859,13 @@ export function DealerChatWidget({
                 }
               }}
               placeholder={
-                !online
-                  ? "Reconnect to send a message…"
+                loading
+                  ? "Assistant is replying…"
                   : withinLiveHours
                     ? "Type your message…"
                     : "Leave a message for our team…"
               }
-              disabled={!online || loading}
+              disabled={loading}
               rows={2}
               className="min-h-[48px] flex-1 resize-none rounded-xl border border-white/[0.12] bg-white/[0.06] px-4 py-2.5 text-[15px] text-white placeholder:text-zinc-500 focus:border-[#c8102e]/50 focus:outline-none focus:ring-2 focus:ring-[#c8102e]/30 disabled:opacity-60"
               aria-label="Message"
@@ -708,7 +873,7 @@ export function DealerChatWidget({
             <button
               type="button"
               onClick={() => void send()}
-              disabled={!online || loading || !input.trim()}
+              disabled={loading || !input.trim()}
               className="shrink-0 self-end rounded-xl px-4 py-3 text-sm font-medium text-white shadow-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 touch-manipulation"
               style={{
                 backgroundColor: "var(--widget-primary)",
@@ -723,7 +888,7 @@ export function DealerChatWidget({
               }}
             >
               {loading ? (
-                <span className="px-0.5" aria-hidden>
+                <span className="px-0.5 text-[11px] font-medium" aria-hidden>
                   …
                 </span>
               ) : (
@@ -732,22 +897,74 @@ export function DealerChatWidget({
               <span className="sr-only">Send</span>
             </button>
           </div>
-          <p className="mt-2 text-[10px] leading-snug text-zinc-500">
-            We may reply by SMS or email depending on your request. By messaging,
-            you agree to our contact policies.
-          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <p className="text-[10px] leading-snug text-zinc-500">
+              We may reply by SMS or email depending on your request. By messaging,
+              you agree to our contact policies.
+            </p>
+            {session ? (
+              <button
+                type="button"
+                onClick={() => {
+                  clearWidgetSession(dealershipSlug);
+                  setSession(null);
+                  setMessages([]);
+                  setActiveTopic(null);
+                  setInput("");
+                  setError(null);
+                  setPhase("intake");
+                }}
+                className="shrink-0 text-[10px] font-medium text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline"
+              >
+                Choose another topic
+              </button>
+            ) : null}
+          </div>
         </footer>
+        </div>
       </div>
 
-      <WidgetPremiumLauncher
-        open={open}
-        panelId={panelId}
-        launcherId={launcherId}
-        launcherBtnRef={launcherBtnRef}
-        onToggle={() => setOpen((o) => !o)}
-        onSelectIntent={openWithIntent}
-      />
+      {!isPage ? (
+        <WidgetPremiumLauncher
+          open={open}
+          panelId={panelId}
+          launcherId={launcherId}
+          launcherBtnRef={launcherBtnRef}
+          onToggle={() => {
+            setOpen((wasOpen) => {
+              if (!wasOpen) {
+                setPhase("intake");
+                setError(null);
+              }
+              return !wasOpen;
+            });
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function TopicWelcomeBubble({
+  topicTitle,
+  body,
+  brandTitle,
+}: {
+  topicTitle: string;
+  body: string;
+  brandTitle: string;
+}) {
+  return (
+    <MessageBubble
+      message={{
+        id: "topic-welcome",
+        body,
+        created_at: new Date().toISOString(),
+        sender: "ai",
+      }}
+      brandTitle={brandTitle}
+      prefixLabel={topicTitle}
+    />
   );
 }
 
@@ -777,9 +994,12 @@ function WelcomeCard({
 function MessageBubble({
   message,
   brandTitle,
+  prefixLabel,
 }: {
   message: WidgetPublicMessage;
   brandTitle: string;
+  /** Optional context line above assistant copy (e.g. selected topic). */
+  prefixLabel?: string;
 }) {
   const isCustomer = message.sender === "customer";
   const senderLabel =
@@ -798,6 +1018,12 @@ function MessageBubble({
       {!isCustomer && senderLabel ? (
         <span className="px-1 text-[10px] font-medium tracking-wide text-zinc-500 uppercase">
           {senderLabel}
+          {prefixLabel ? (
+            <span className="normal-case tracking-normal text-zinc-400">
+              {" "}
+              · {prefixLabel}
+            </span>
+          ) : null}
         </span>
       ) : null}
       <div
@@ -816,18 +1042,20 @@ function MessageBubble({
         }
       >
         <p className="whitespace-pre-wrap break-words">{message.body}</p>
-        <time
-          className={cn(
-            "mt-1.5 block text-[10px] tabular-nums opacity-80",
-            isCustomer ? "text-white/85" : "text-muted-foreground"
-          )}
-          dateTime={message.created_at}
-        >
-          {new Date(message.created_at).toLocaleTimeString(undefined, {
-            hour: "numeric",
-            minute: "2-digit",
-          })}
-        </time>
+        {message.id !== "topic-welcome" ? (
+          <time
+            className={cn(
+              "mt-1.5 block text-[10px] tabular-nums opacity-80",
+              isCustomer ? "text-white/85" : "text-muted-foreground"
+            )}
+            dateTime={message.created_at}
+          >
+            {new Date(message.created_at).toLocaleTimeString(undefined, {
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </time>
+        ) : null}
       </div>
     </div>
   );

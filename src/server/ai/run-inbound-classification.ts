@@ -15,6 +15,7 @@ import { evaluateLiveHours, formatTimezoneShortLabel, parseBusinessHoursConfig }
 import {
   isAfterHoursWebChatIntake,
   isWidgetAiIntroMessageSent,
+  readWidgetIntakeIntent,
   withWidgetAiIntroMessageSent,
 } from "@/lib/conversation/widget-metadata";
 import { createSupabaseAdminClient } from "@/integrations/supabase/admin";
@@ -199,6 +200,38 @@ function normalizeProfilePatch(input: {
   return patch;
 }
 
+function orderMissingProfileFields(fields: string[]): string[] {
+  const priority = ["phone", "name", "email"] as const;
+  return priority.filter((f) => fields.includes(f));
+}
+
+/** Widget uses one LLM call; nudge for contact info without a second completion. */
+function augmentWebChatDraftWithProfileAsk(
+  draft: string,
+  missingOrdered: string[]
+): string {
+  const base = draft.trim();
+  if (missingOrdered.length === 0) {
+    return base;
+  }
+  const field = missingOrdered[0];
+  const lower = base.toLowerCase();
+  if (
+    (field === "phone" && /\b(phone|number|call|text)\b/.test(lower)) ||
+    (field === "name" && /\b(name)\b/.test(lower)) ||
+    (field === "email" && /\b(email)\b/.test(lower))
+  ) {
+    return base;
+  }
+  const ask =
+    field === "phone"
+      ? " What's the best phone number for our team to reach you?"
+      : field === "name"
+        ? " May I have your name?"
+        : " What's a good email for you?";
+  return `${base}${ask}`;
+}
+
 async function generateConversationalReply(input: {
   model: string;
   channel: ConversationChannel;
@@ -208,13 +241,24 @@ async function generateConversationalReply(input: {
   currentDepartment: string;
   missingProfileFields: string[];
   activeOffersPrompt: string;
+  widgetIntakeTopic?: string | null;
 }): Promise<{ reply: string; handoffNow: boolean; offerId: string | null } | null> {
+  const missingOrdered = orderMissingProfileFields(input.missingProfileFields);
+  const webChatDirect =
+    input.channel === "web_chat"
+      ? `This reply goes straight to the website visitor (not staff). ${
+          missingOrdered.length > 0
+            ? `Before deep qualification, naturally ask for their ${missingOrdered[0]} so the team can follow up.`
+            : ""
+        }`
+      : "";
   const system = `You are a sharp dealership sales/service chat assistant (like a strong BDC rep).
 Respond naturally to the latest customer turn — reference their exact words and vehicle interest.
+${webChatDirect}
 Goals:
-- Be specific: if they said Tundra/truck/SUV, acknowledge it and ask ONE smart qualifier (new vs used, year/trim, timeline).
+- Be specific: if they said Tundra/truck/SUV/Escape, acknowledge it and ask ONE smart qualifier (new vs used, year/trim, timeline).
 - Do not repeat generic openers ("share more detail", "best next step") if the transcript already has them.
-- Collect missing profile fields when natural (name, phone, email) — one ask per turn max.
+- Collect missing profile fields when natural (phone first, then name, then email) — one ask per turn max.
 - Set handoff_now to true ONLY when: they want a human, pricing/payment numbers, same-day appointment, or you cannot help without staff.
 - When handoff_now is false, do NOT say you passed this to the team or that someone will follow up.
 
@@ -224,8 +268,11 @@ Safety:
 
 ${input.activeOffersPrompt}`;
 
+  const topicLine = input.widgetIntakeTopic
+    ? `Widget topic at start: ${input.widgetIntakeTopic.replace(/_/g, " ")}\n`
+    : "";
   const user = `Channel: ${input.channel}
-Current department: ${input.currentDepartment}
+${topicLine}Current department: ${input.currentDepartment}
 Classifier snapshot:
 - intent: ${input.classification.intent}
 - department: ${input.classification.department}
@@ -234,10 +281,8 @@ Classifier snapshot:
 - escalate_to_human: ${input.classification.escalate_to_human ? "true" : "false"}
 - suggested_action: ${input.classification.recommended_action}
 
-Missing profile fields (collect naturally when possible): ${
-    input.missingProfileFields.length > 0
-      ? input.missingProfileFields.join(", ")
-      : "none"
+Missing profile fields (collect naturally when possible, priority order): ${
+    missingOrdered.length > 0 ? missingOrdered.join(", ") : "none"
   }
 
 Recent transcript (oldest first):
@@ -399,6 +444,53 @@ function fallbackStored(
   };
 }
 
+const WEB_CHAT_CONTACT_FALLBACK =
+  "Thanks for sharing that. What's the best name and phone number for our team to reach you?";
+
+async function sendWebChatEnvFallbackReply(
+  supabase: TypedSupabaseClient,
+  input: {
+    dealershipId: string;
+    conversationId: string;
+    messageId: string;
+    channel: ConversationChannel;
+  }
+): Promise<void> {
+  if (input.channel !== "web_chat") {
+    return;
+  }
+  const convRow = await getConversationRowById(
+    input.dealershipId,
+    input.conversationId,
+    supabase
+  );
+  if (
+    !convRow.ok ||
+    !isWebChatAutomatedTriageUnblocked(
+      convRow.data.channel,
+      convRow.data.ai_enabled,
+      convRow.data.status,
+      convRow.data.metadata
+    )
+  ) {
+    return;
+  }
+  await createMessage(
+    {
+      dealershipId: input.dealershipId,
+      conversationId: input.conversationId,
+      senderType: "ai",
+      body: WEB_CHAT_CONTACT_FALLBACK,
+      deliveryStatus: "sent",
+      metadata: {
+        source: "ai_web_chat_env_fallback",
+        classification_message_id: input.messageId,
+      },
+    },
+    supabase
+  );
+}
+
 /**
  * Runs structured classification + safe draft for one inbound customer message.
  * Optional one-shot after-hours web widget auto-reply (service intake) when enabled via env.
@@ -421,6 +513,8 @@ export async function runInboundClassification(input: {
         e
       );
     }
+    const supabase = createSupabaseAdminClient();
+    await sendWebChatEnvFallbackReply(supabase, input);
     return ok(undefined);
   }
 
@@ -577,11 +671,15 @@ export async function runInboundClassification(input: {
     });
   }
 
+  const widgetIntakeTopic =
+    convRow.ok ? readWidgetIntakeIntent(convRow.data.metadata) : null;
+
   const userPrompt = buildInboundClassificationUserPrompt({
     channel: input.channel,
     conversationDepartment: input.conversationDepartment,
     recentTranscript: transcript,
     latestCustomerMessage: input.customerMessageBody,
+    widgetIntakeTopic,
   });
 
   let modelOutput: InboundClassificationModelOutput | null = null;
@@ -793,7 +891,7 @@ export async function runInboundClassification(input: {
     !blockAiCustomerMessages &&
     !draftSafe.redacted &&
     convRow.ok &&
-    convRow.data.channel === "web_chat"
+    convRow.data.channel !== "web_chat"
   ) {
     const extractedHints = extractProfileHintsFromText(input.customerMessageBody);
     const mergedProfile = mergeExtractedCustomerProfile({
@@ -836,6 +934,7 @@ export async function runInboundClassification(input: {
       currentDepartment: input.conversationDepartment,
       missingProfileFields,
       activeOffersPrompt: offersPrompt,
+      widgetIntakeTopic,
     });
 
     if (generated?.reply?.trim()) {
@@ -875,6 +974,49 @@ export async function runInboundClassification(input: {
         effectiveEscalate = true;
       }
     }
+  } else if (
+    shouldSendAutoReply &&
+    !blockAiCustomerMessages &&
+    !draftSafe.redacted &&
+    convRow.ok &&
+    convRow.data.channel === "web_chat"
+  ) {
+    const extractedHints = extractProfileHintsFromText(input.customerMessageBody);
+    const mergedProfile = mergeExtractedCustomerProfile({
+      fromModel: {
+        name: classified.customer_profile.name,
+        email: classified.customer_profile.email,
+        phoneE164: classified.customer_profile.phone_e164,
+      },
+      fromHeuristics: extractedHints,
+    });
+    let customerKnown: {
+      display_name: string | null;
+      email: string | null;
+      phone_e164: string | null;
+    } | null = null;
+    if (convRow.data.customer_id) {
+      const customerRes = await getCustomerById(
+        input.dealershipId,
+        convRow.data.customer_id,
+        supabase
+      );
+      if (customerRes.ok) {
+        customerKnown = customerRes.data;
+      }
+    }
+    const missingProfileFields = orderMissingProfileFields(
+      profileFieldsStillMissing({
+        displayName: customerKnown?.display_name ?? mergedProfile.name,
+        email: customerKnown?.email ?? mergedProfile.email,
+        phoneE164: customerKnown?.phone_e164 ?? mergedProfile.phoneE164,
+        extracted: mergedProfile,
+      })
+    );
+    generatedReplyBody = augmentWebChatDraftWithProfileAsk(
+      classified.safe_draft_reply.trim(),
+      missingProfileFields
+    );
   }
 
   const stored: InboundClassificationStored = {
@@ -1073,11 +1215,15 @@ export async function runInboundClassification(input: {
   if (
     shouldSendAutoReply &&
     !blockAiCustomerMessages &&
-    !draftSafe.redacted &&
     convRow.ok &&
     convRow.data.channel === "web_chat"
   ) {
-    const replyBody = (generatedReplyBody ?? classified.safe_draft_reply).trim();
+    let replyBody = draftSafe.redacted
+      ? WEB_CHAT_CONTACT_FALLBACK
+      : (generatedReplyBody ?? classified.safe_draft_reply).trim();
+    if (replyBody.length === 0) {
+      replyBody = WEB_CHAT_CONTACT_FALLBACK;
+    }
     if (replyBody.length > 0) {
       const afterHoursOneShot = canSendAfterHoursIntro;
       const distinctBody = await webChatDistinctAiBody(supabase, input, replyBody);

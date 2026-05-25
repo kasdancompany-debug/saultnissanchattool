@@ -16,7 +16,7 @@ export default function WidgetLayout({
       <style
         dangerouslySetInnerHTML={{
           __html:
-            "html,body{background:transparent;min-height:0;margin:0}",
+            "html,body{background:transparent;min-height:0;margin:0;overflow:hidden}",
         }}
       />
       {children}

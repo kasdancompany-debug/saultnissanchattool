@@ -56,6 +56,17 @@ export const widgetStartBodySchema = z.object({
   ),
   /** Guided intake completed — creates CRM row, conversation metadata, and first message. */
   lead_capture: widgetLeadCaptureSchema.optional(),
+  /** Topic chosen on the widget menu — starts AI chat without full intake form. */
+  widget_intent: z
+    .enum([
+      "new_vehicle",
+      "used_vehicle",
+      "trade_value",
+      "service",
+      "financing",
+      "general",
+    ])
+    .optional(),
 });
 
 /**

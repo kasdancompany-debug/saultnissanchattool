@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Sync .env.local → Vercel (production). Usage:
- *   node scripts/sync-vercel-env.mjs saultnissanchattool-br58 https://saultnissanchattool-br58.vercel.app
+ * Sync .env.local → Vercel (production + preview).
+ * Usage: node scripts/sync-vercel-env.mjs <vercel-project> <NEXT_PUBLIC_APP_URL>
  */
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -14,7 +14,9 @@ const project = process.argv[2];
 const appUrl = process.argv[3];
 
 if (!project || !appUrl) {
-  console.error("Usage: node scripts/sync-vercel-env.mjs <vercel-project> <NEXT_PUBLIC_APP_URL>");
+  console.error(
+    "Usage: node scripts/sync-vercel-env.mjs <vercel-project> <NEXT_PUBLIC_APP_URL>"
+  );
   process.exit(1);
 }
 
@@ -46,19 +48,28 @@ function parseEnvFile(path) {
 
 const vars = parseEnvFile(envPath);
 vars.NEXT_PUBLIC_APP_URL = appUrl;
+
 if (!vars.NEXT_PUBLIC_SUPABASE_ANON_KEY && vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
   vars.NEXT_PUBLIC_SUPABASE_ANON_KEY = vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 }
+
+if (vars.NEXT_PUBLIC_SUPABASE_URL) vars.SUPABASE_URL = vars.NEXT_PUBLIC_SUPABASE_URL;
+if (vars.NEXT_PUBLIC_SUPABASE_ANON_KEY) vars.SUPABASE_ANON_KEY = vars.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (vars.NEXT_PUBLIC_APP_URL) vars.APP_URL = vars.NEXT_PUBLIC_APP_URL;
+
+const environments = ["production", "preview"];
 
 console.log(`\n=== ${project} → ${appUrl} ===\n`);
 execSync(`npx vercel link --project ${project} --yes`, { cwd: root, stdio: "inherit" });
 
 for (const [key, value] of Object.entries(vars)) {
-  console.log(`  + ${key} (production)`);
-  execSync(
-    `npx vercel env add ${key} production --value ${JSON.stringify(value)} --yes --force`,
-    { cwd: root, stdio: "inherit" }
-  );
+  for (const env of environments) {
+    console.log(`  + ${key} (${env})`);
+    execSync(
+      `npx vercel env add ${key} ${env} --value ${JSON.stringify(value)} --yes --force`,
+      { cwd: root, stdio: "inherit" }
+    );
+  }
 }
 
-console.log("\nDone.\n");
+console.log("\nDone. Redeploy production so NEXT_PUBLIC_* are baked into the client bundle.\n");

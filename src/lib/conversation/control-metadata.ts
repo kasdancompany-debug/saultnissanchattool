@@ -45,6 +45,16 @@ export function defaultAiLeadControl(): Record<string, unknown> {
   };
 }
 
+/** Public web widget: AI sends customer-facing replies until staff claims the thread. */
+export function widgetWebChatControl(): Record<string, unknown> {
+  return {
+    handling_mode: "ai_active" satisfies ConversationHandlingMode,
+    mode: "ai_led",
+    ai_mode: "triage",
+    ai_autopilot: true,
+  };
+}
+
 export function isConversationHumanControlled(metadata: unknown): boolean {
   const control = asRecord(asRecord(metadata).control);
   if (control.mode === "human_led") {

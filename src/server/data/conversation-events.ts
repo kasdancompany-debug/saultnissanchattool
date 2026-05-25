@@ -20,10 +20,10 @@ export async function insertConversationEvent(
     const isEventEnumMismatch =
       msg.includes("invalid input value for enum conversation_event_type");
 
-    // Local compatibility mode: older DB enum values should not block core inbox actions.
-    if (isEventEnumMismatch && process.env.NODE_ENV !== "production") {
+    // Older/missing migrations must not block messages (e.g. widget AI when `ai_reply_sent` enum is absent).
+    if (isEventEnumMismatch) {
       console.warn(
-        "[conversation-events] Skipping unsupported event_type in non-production:",
+        "[conversation-events] Skipping unsupported event_type (apply latest Supabase migrations):",
         row.event_type
       );
       return ok(undefined);

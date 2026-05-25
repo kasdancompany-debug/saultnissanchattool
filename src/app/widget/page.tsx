@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export default async function WidgetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ slug?: string }>;
+  searchParams: Promise<{ slug?: string; preview?: string; open?: string }>;
 }) {
   const params = await searchParams;
   const raw = params.slug?.trim();
@@ -26,6 +26,11 @@ export default async function WidgetPage({
     raw && raw.length > 0 ? raw : publicEnv.NEXT_PUBLIC_WIDGET_DEALERSHIP_SLUG
   ).toLowerCase();
   const openAiConfigured = isInboundOpenAiConfigured();
+  /** Centered full-panel demo only — website iframe embed uses default floating launcher. */
+  const previewMode =
+    params.preview === "1" || params.preview === "true";
+  /** Only full-page preview auto-opens; iframe visitors use the launcher → topic menu. */
+  const openOnLoad = previewMode;
 
   try {
     const requested = await getDealershipWidgetBundleBySlug(slug);
@@ -44,7 +49,8 @@ export default async function WidgetPage({
         <DealerChatWidget
           dealershipSlug={bundle.slug}
           businessHoursConfig={bundle.businessHours}
-          defaultOpen
+          defaultOpen={openOnLoad}
+          presentation={previewMode ? "page" : "embed"}
           openAiConfigured={openAiConfigured}
         />
       );
@@ -60,7 +66,8 @@ export default async function WidgetPage({
     <DealerChatWidget
       dealershipSlug={fallbackSlug}
       businessHoursConfig={fallbackHours}
-      defaultOpen
+      defaultOpen={openOnLoad}
+      presentation={previewMode ? "page" : "embed"}
       openAiConfigured={openAiConfigured}
     />
   );

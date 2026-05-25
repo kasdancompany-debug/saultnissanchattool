@@ -202,6 +202,7 @@ export function InboxThreadPanel({
         currentStaffUserId={currentStaffUserId}
         canManageAssignments={canManageAssignments}
         staffDirectory={staffDirectory}
+        conversationMetadata={conversationMetadata}
       />
 
       <ScrollArea className="min-h-0 flex-1">

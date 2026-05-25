@@ -17,9 +17,27 @@ import {
   getOrCreateCustomerByPhoneOrEmail,
 } from "@/server/data/customers";
 import { insertConversationEvent } from "@/server/data/conversation-events";
+import {
+  isConversationHumanControlled,
+  isWebChatAutomatedTriageUnblocked,
+  mergeConversationControl,
+  widgetWebChatControl,
+} from "@/lib/conversation/control-metadata";
+import { OPEN_QUEUE_STATUSES } from "@/lib/conversation/status-sets";
 import { getConversationRowById } from "@/server/data/conversations";
+import { runWidgetAssistantReply } from "@/server/widget/run-widget-assistant-reply";
+import { buildContextualWidgetReply } from "@/server/widget/widget-contextual-reply";
+import {
+  aggregateProfileHintsFromTexts,
+  extractProfileHintsFromText,
+  mergeExtractedCustomerProfile,
+  profileFieldsStillMissing,
+} from "@/lib/conversation/extract-profile-hints";
+import { readWidgetIntakeIntent } from "@/lib/conversation/widget-metadata";
+import { createMessage, getMessagesForConversation } from "@/server/data/messages";
 import { webChatInboundAdapter } from "@/server/inbox/adapters/web-chat.adapter";
 import { err, ok, type Result } from "@/server/result";
+import type { TypedSupabaseClient } from "@/server/db/server-client";
 
 import { evaluateLiveHours } from "@/lib/business-hours";
 import {
@@ -73,6 +91,8 @@ export type StartWidgetConversationInput = {
   phoneE164?: string | null;
   userAgent?: string | null;
   leadCapture?: WidgetLeadCaptureInput | null;
+  /** Menu topic when starting chat-first (no full intake form). */
+  widgetIntent?: WidgetLeadCaptureInput["intent"] | null;
 };
 
 export type StartWidgetConversationResult = {
@@ -215,6 +235,7 @@ export async function startWidgetConversation(
   const supabase = createSupabaseAdminClient();
 
   const lead = input.leadCapture ?? null;
+  const menuIntent = input.widgetIntent ?? lead?.intent ?? null;
 
   let customerId: string | null = null;
   const phone =
@@ -258,7 +279,11 @@ export async function startWidgetConversation(
 
   const department =
     input.department ??
-    (lead ? departmentForLeadIntent(lead.intent) : null) ??
+    (menuIntent
+      ? departmentForLeadIntent(menuIntent)
+      : lead
+        ? departmentForLeadIntent(lead.intent)
+        : null) ??
     inferDepartmentFromPagePath(input.pagePath ?? undefined);
 
   const live = evaluateLiveHours(bundle.businessHours, department, new Date());
@@ -267,12 +292,14 @@ export async function startWidgetConversation(
 
   const baseMetadata: Json = {
     widget: {
+      source: "website_widget",
       page_path: input.pagePath ?? null,
       user_agent_snippet: ua,
       after_hours: live.after_hours,
       live_hours_evaluated_at: live.evaluated_at,
       timezone: live.timezone,
       schedule_key: live.schedule_key,
+      ...(menuIntent ? { intake_intent: menuIntent, chat_first: true } : {}),
     },
   };
 
@@ -285,12 +312,15 @@ export async function startWidgetConversation(
       aiEnabled: true,
       title: lead
         ? buildLeadConversationTitle(lead)
-        : displayName
-          ? `Web chat — ${displayName}`
-          : "Web chat",
+        : menuIntent
+          ? `Web chat — ${menuIntent.replace(/_/g, " ")}`
+          : displayName
+            ? `Web chat — ${displayName}`
+            : "Web chat",
       metadata: lead
         ? mergeLeadIntoConversationMetadata(baseMetadata, lead)
         : baseMetadata,
+      controlPatch: widgetWebChatControl(),
     },
     supabase
   );
@@ -407,7 +437,14 @@ export async function postWidgetCustomerMessage(input: {
   dealershipId: string;
   conversationId: string;
   body: string;
-}): Promise<Result<{ id: string; created_at: string }>> {
+}): Promise<
+  Result<{
+    id: string;
+    created_at: string;
+    channel: import("@/integrations/supabase/database.types").ConversationChannel;
+    conversation_department: string;
+  }>
+> {
   const supabase = createSupabaseAdminClient();
 
   const conv = await getConversationRowById(
@@ -454,7 +491,226 @@ export async function postWidgetCustomerMessage(input: {
   return ok({
     id: ingestRes.data.messageId,
     created_at: ingestRes.data.createdAt,
+    channel: conv.data.channel,
+    conversation_department: conv.data.department,
   });
+}
+
+export type WidgetInboundAiJob = {
+  dealershipId: string;
+  conversationId: string;
+  messageId: string;
+  customerMessageBody: string;
+  channel: import("@/integrations/supabase/database.types").ConversationChannel;
+  conversationDepartment: string;
+};
+
+/**
+ * Legacy widget threads may have `ai_enabled = false` (DB default). Re-enable AI for open,
+ * unclaimed web chats so the public widget can still reply until staff takes over.
+ */
+async function ensureWidgetAiEnabledForReply(
+  job: Pick<WidgetInboundAiJob, "dealershipId" | "conversationId" | "channel">,
+  db: TypedSupabaseClient
+): Promise<void> {
+  if (job.channel !== "web_chat") {
+    return;
+  }
+
+  const conv = await getConversationRowById(
+    job.dealershipId,
+    job.conversationId,
+    db
+  );
+  if (!conv.ok) {
+    return;
+  }
+
+  const { channel, ai_enabled, status, metadata } = conv.data;
+  if (channel !== "web_chat" || ai_enabled) {
+    return;
+  }
+  if (isConversationHumanControlled(metadata)) {
+    return;
+  }
+  if (!OPEN_QUEUE_STATUSES.includes(status)) {
+    return;
+  }
+
+  await db
+    .from("conversations")
+    .update({
+      ai_enabled: true,
+      metadata: mergeConversationControl(metadata, widgetWebChatControl()),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", job.conversationId)
+    .eq("dealership_id", job.dealershipId);
+}
+
+async function ensureWebChatAssistantReply(job: WidgetInboundAiJob): Promise<void> {
+  if (job.channel !== "web_chat") {
+    return;
+  }
+  const supabase = createSupabaseAdminClient();
+  const conv = await getConversationRowById(
+    job.dealershipId,
+    job.conversationId,
+    supabase
+  );
+  if (
+    !conv.ok ||
+    !isWebChatAutomatedTriageUnblocked(
+      conv.data.channel,
+      conv.data.ai_enabled,
+      conv.data.status,
+      conv.data.metadata
+    )
+  ) {
+    return;
+  }
+
+  const existing = await findAssistantMessageAfterCustomer(
+    job.dealershipId,
+    job.conversationId,
+    job.messageId,
+    supabase
+  );
+  if (existing) {
+    return;
+  }
+
+  const rows = await getMessagesForConversation(
+    job.dealershipId,
+    job.conversationId,
+    { limit: 40, db: supabase }
+  );
+  const customerBodies =
+    rows.ok
+      ? rows.data
+          .filter((m) => m.sender_type === "customer")
+          .map((m) => (m.body ?? "").trim())
+          .filter(Boolean)
+      : [job.customerMessageBody];
+  const threadText = customerBodies.join("\n");
+  const threadHints = aggregateProfileHintsFromTexts(customerBodies);
+  const latestHints = extractProfileHintsFromText(job.customerMessageBody);
+  const merged = mergeExtractedCustomerProfile({
+    fromModel: threadHints,
+    fromHeuristics: latestHints,
+  });
+  const lastAssistantMessage = rows.ok
+    ? [...rows.data]
+        .reverse()
+        .find((m) => m.sender_type === "ai")?.body ?? null
+    : null;
+
+  let customerKnown: {
+    display_name: string | null;
+    email: string | null;
+    phone_e164: string | null;
+  } | null = null;
+  if (conv.data.customer_id) {
+    const cust = await getCustomerById(
+      job.dealershipId,
+      conv.data.customer_id,
+      supabase
+    );
+    if (cust.ok) customerKnown = cust.data;
+  }
+
+  const body = buildContextualWidgetReply({
+    customerMessage: job.customerMessageBody,
+    threadText,
+    department: job.conversationDepartment,
+    topic: readWidgetIntakeIntent(conv.data.metadata),
+    hints: merged,
+    missingAfterHints: profileFieldsStillMissing({
+      displayName: customerKnown?.display_name,
+      email: customerKnown?.email,
+      phoneE164: customerKnown?.phone_e164,
+      extracted: merged,
+    }),
+    knownDisplayName: customerKnown?.display_name,
+    knownPhoneE164: customerKnown?.phone_e164,
+    lastAssistantMessage,
+  });
+
+  await createMessage(
+    {
+      dealershipId: job.dealershipId,
+      conversationId: job.conversationId,
+      senderType: "ai",
+      body,
+      deliveryStatus: "sent",
+      metadata: {
+        source: "ai_web_chat_guaranteed_fallback",
+        classification_message_id: job.messageId,
+      },
+    },
+    supabase
+  );
+}
+
+/** Run widget assistant reply (single LLM call) with guaranteed fallback message. */
+export async function runWidgetInboundAi(
+  job: WidgetInboundAiJob
+): Promise<WidgetPublicMessage | null> {
+  const supabase = createSupabaseAdminClient();
+  await ensureWidgetAiEnabledForReply(job, supabase);
+
+  const direct = await runWidgetAssistantReply(job);
+  if (direct) {
+    return direct;
+  }
+  await ensureWebChatAssistantReply(job);
+  return findAssistantMessageAfterCustomer(
+    job.dealershipId,
+    job.conversationId,
+    job.messageId,
+    supabase
+  );
+}
+
+async function findAssistantMessageAfterCustomer(
+  dealershipId: string,
+  conversationId: string,
+  customerMessageId: string,
+  db: TypedSupabaseClient
+): Promise<WidgetPublicMessage | null> {
+  const rows = await getMessagesForConversation(dealershipId, conversationId, {
+    limit: 50,
+    db,
+  });
+  if (!rows.ok) {
+    return null;
+  }
+  const idx = rows.data.findIndex((m) => m.id === customerMessageId);
+  if (idx < 0) {
+    return null;
+  }
+  const aiRow = rows.data.slice(idx + 1).find((m) => m.sender_type === "ai");
+  if (!aiRow?.body?.trim()) {
+    return null;
+  }
+  return {
+    id: aiRow.id,
+    body: aiRow.body,
+    created_at: aiRow.created_at,
+    sender: "ai",
+  };
+}
+
+export async function findWidgetAssistantReplyAfterCustomer(
+  job: Pick<WidgetInboundAiJob, "dealershipId" | "conversationId" | "messageId">
+): Promise<WidgetPublicMessage | null> {
+  const supabase = createSupabaseAdminClient();
+  return findAssistantMessageAfterCustomer(
+    job.dealershipId,
+    job.conversationId,
+    job.messageId,
+    supabase
+  );
 }
 
 export async function listWidgetMessages(input: {

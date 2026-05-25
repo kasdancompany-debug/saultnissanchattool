@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 
 import { getWidgetSecrets, isWidgetConfigured } from "@/lib/env/widget";
@@ -12,9 +13,14 @@ import { clientIpFromRequest, isRateLimitError, rateLimitOrThrow } from "@/serve
 import {
   listWidgetMessages,
   postWidgetCustomerMessage,
+  findWidgetAssistantReplyAfterCustomer,
+  runWidgetInboundAi,
 } from "@/server/widget/widget-public-service";
 import { widgetPostMessageBodySchema } from "@/server/widget/widget-schemas";
 import { verifyWidgetSessionToken } from "@/lib/widget/session-token";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function OPTIONS(request: Request) {
   if (!isWidgetConfigured()) {
@@ -238,10 +244,11 @@ export async function POST(
     );
   }
 
+  const customerText = parsed.data.text.trim();
   const result = await postWidgetCustomerMessage({
     dealershipId: payload.dealershipId,
     conversationId,
-    body: parsed.data.text.trim(),
+    body: customerText,
   });
 
   if (!result.ok) {
@@ -254,10 +261,41 @@ export async function POST(
     );
   }
 
+  const aiJob = {
+    dealershipId: payload.dealershipId,
+    conversationId,
+    messageId: result.data.id,
+    customerMessageBody: customerText,
+    channel: result.data.channel,
+    conversationDepartment: result.data.conversation_department,
+  };
+
+  let assistantMessage: Awaited<
+    ReturnType<typeof findWidgetAssistantReplyAfterCustomer>
+  > = null;
+  try {
+    assistantMessage = await runWidgetInboundAi(aiJob);
+  } catch (error) {
+    console.error("[widget] inbound AI failed on customer message", error);
+    assistantMessage = await findWidgetAssistantReplyAfterCustomer(aiJob);
+  }
+
+  if (!assistantMessage) {
+    after(async () => {
+      try {
+        await runWidgetInboundAi(aiJob);
+      } catch (bgError) {
+        console.error("[widget] inbound AI after() failed", bgError);
+      }
+    });
+    assistantMessage = await findWidgetAssistantReplyAfterCustomer(aiJob);
+  }
+
   return widgetJsonResponse(
     {
       id: result.data.id,
       created_at: result.data.created_at,
+      assistant_message: assistantMessage,
     },
     200,
     request,

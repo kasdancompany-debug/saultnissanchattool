@@ -15,6 +15,14 @@ import {
   type InboxConversationActionState,
 } from "@/app/(dashboard)/inbox/conversation-action-states";
 
+import {
+  activePipelineOutcomes,
+  PIPELINE_OUTCOME_LABEL,
+  readPipelineFromMetadata,
+  type PipelineOutcomeKey,
+} from "@/lib/conversation/pipeline-outcomes";
+
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { SubmitButton } from "@/components/ui/submit-button";
 import {
@@ -39,6 +47,7 @@ export function InboxThreadToolbar({
   currentStaffUserId,
   canManageAssignments,
   staffDirectory,
+  conversationMetadata,
 }: {
   id?: string;
   conversationId: string;
@@ -49,6 +58,7 @@ export function InboxThreadToolbar({
   currentStaffUserId: string;
   canManageAssignments: boolean;
   staffDirectory: StaffPickerOption[];
+  conversationMetadata: unknown;
 }) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState<
@@ -101,6 +111,21 @@ export function InboxThreadToolbar({
   const showDeptButtons = !terminal;
 
   const showClose = !terminal;
+
+  const pipeline = readPipelineFromMetadata(conversationMetadata);
+  const pipelineActive = activePipelineOutcomes(pipeline);
+
+  const pipelineButtonClass = (key: PipelineOutcomeKey, active: boolean) =>
+    cn(
+      active &&
+        (key === "sold"
+          ? "border-emerald-500/50 bg-emerald-500/15"
+          : key === "lost"
+            ? "border-rose-500/40 bg-rose-500/10"
+            : key === "appointment"
+              ? "border-violet-500/45 bg-violet-500/12"
+              : "border-sky-500/45 bg-sky-500/12")
+    );
 
   /** Takeover path only when another teammate is the primary owner (server enforces CAS without this). */
   const takeover =
@@ -280,6 +305,135 @@ export function InboxThreadToolbar({
                 </>
               ) : null}
             </div>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-2">
+            <p className="text-muted-foreground text-xs font-medium">
+              Pipeline (Overview metrics)
+            </p>
+            <p className="text-muted-foreground/80 text-[11px] leading-relaxed">
+              War room only counts these marks — not chat keywords or AI scores.
+              Mark appointment when it is actually booked.
+            </p>
+            {pipelineActive.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {pipelineActive.map((key) => (
+                  <Badge
+                    key={key}
+                    variant="outline"
+                    className="text-[10px] font-semibold tracking-wide uppercase"
+                  >
+                    {PIPELINE_OUTCOME_LABEL[key]}
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <SubmitButton
+                type="submit"
+                name="intent"
+                value="mark_pipeline_qualified"
+                size="sm"
+                variant="outline"
+                className={pipelineButtonClass("qualified", Boolean(pipeline.qualified))}
+                title="Counts as a qualified lead on Overview."
+              >
+                Qualified
+              </SubmitButton>
+              <SubmitButton
+                type="submit"
+                name="intent"
+                value="mark_pipeline_appointment"
+                size="sm"
+                variant="outline"
+                className={pipelineButtonClass(
+                  "appointment",
+                  Boolean(pipeline.appointment)
+                )}
+                title="Counts as an appointment booked on Overview."
+              >
+                Appointment
+              </SubmitButton>
+              <SubmitButton
+                type="submit"
+                name="intent"
+                value="mark_pipeline_sold"
+                size="sm"
+                variant="outline"
+                className={pipelineButtonClass("sold", Boolean(pipeline.sold))}
+                title="Marks sold and closes the thread for Overview funnel."
+              >
+                Sold
+              </SubmitButton>
+              <SubmitButton
+                type="submit"
+                name="intent"
+                value="mark_pipeline_lost"
+                size="sm"
+                variant="outline"
+                className={pipelineButtonClass("lost", Boolean(pipeline.lost))}
+                title="Marks lost and closes the thread."
+              >
+                Lost
+              </SubmitButton>
+            </div>
+            {pipelineActive.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">
+                  Clear
+                </span>
+                {pipeline.qualified ? (
+                  <SubmitButton
+                    type="submit"
+                    name="intent"
+                    value="clear_pipeline_qualified"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[11px]"
+                  >
+                    Qualified
+                  </SubmitButton>
+                ) : null}
+                {pipeline.appointment ? (
+                  <SubmitButton
+                    type="submit"
+                    name="intent"
+                    value="clear_pipeline_appointment"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[11px]"
+                  >
+                    Appointment
+                  </SubmitButton>
+                ) : null}
+                {pipeline.sold ? (
+                  <SubmitButton
+                    type="submit"
+                    name="intent"
+                    value="clear_pipeline_sold"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[11px]"
+                  >
+                    Sold
+                  </SubmitButton>
+                ) : null}
+                {pipeline.lost ? (
+                  <SubmitButton
+                    type="submit"
+                    name="intent"
+                    value="clear_pipeline_lost"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[11px]"
+                  >
+                    Lost
+                  </SubmitButton>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <Separator />

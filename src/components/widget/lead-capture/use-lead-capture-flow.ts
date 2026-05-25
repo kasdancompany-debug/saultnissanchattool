@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { stepsForLeadIntent } from "@/lib/widget/lead-capture/flows";
 import type {
@@ -37,6 +37,16 @@ export function useLeadCaptureFlow() {
     setTranscript((t) => [...t, { id: lineId(), role, body }]);
   }, []);
 
+  const pendingFirstAnswerRef = useRef<string | null>(null);
+
+  const resetToMenu = useCallback(() => {
+    pendingFirstAnswerRef.current = null;
+    setIntent(null);
+    setStepIndex(0);
+    setAnswers({});
+    setTranscript([]);
+  }, []);
+
   const selectIntent = useCallback((next: LeadIntent, cardTitle: string) => {
     const flowSteps = stepsForLeadIntent(next);
     let startIndex = 0;
@@ -58,6 +68,16 @@ export function useLeadCaptureFlow() {
     setAnswers({});
     setTranscript(lines);
   }, []);
+
+  const selectIntentWithFirstAnswer = useCallback(
+    (next: LeadIntent, cardTitle: string, answer: string) => {
+      const trimmed = answer.trim();
+      if (!trimmed) return;
+      selectIntent(next, cardTitle);
+      pendingFirstAnswerRef.current = trimmed;
+    },
+    [selectIntent]
+  );
 
   const advance = useCallback(() => {
     setStepIndex((i) => {
@@ -126,6 +146,15 @@ export function useLeadCaptureFlow() {
 
   const isComplete = stepIndex >= steps.length && steps.length > 0;
 
+  const inputSteps = useMemo(
+    () => steps.filter((s) => s.kind !== "assistant"),
+    [steps]
+  );
+  const inputStepNumber =
+    currentStep && currentStep.kind !== "assistant"
+      ? inputSteps.findIndex((s) => s.id === currentStep.id) + 1
+      : 0;
+
   return {
     intent,
     steps,
@@ -133,10 +162,15 @@ export function useLeadCaptureFlow() {
     currentStep,
     transcript,
     selectIntent,
+    selectIntentWithFirstAnswer,
+    resetToMenu,
+    pendingFirstAnswerRef,
     submitAnswer,
     skipEmail,
     buildPayload,
     isComplete,
     pushLine,
+    inputStepNumber,
+    inputStepTotal: inputSteps.length,
   };
 }

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createSupabaseBrowserClient } from "@/integrations/supabase/browser";
-import { isSupabaseConfigured, publicEnv } from "@/lib/env/public";
+import { getClientPublicEnv } from "@/lib/env/client-public-env";
+import { isSupabaseConfigured } from "@/lib/env/public";
 import { buildInboxHref } from "@/components/inbox/inbox-params";
 
 export type HandoffAlert = {
@@ -93,7 +94,7 @@ export function useHandoffRealtime(
 
   useEffect(() => {
     if (!enabled || !dealershipId.trim()) return;
-    if (!isSupabaseConfigured(publicEnv)) return;
+    if (!isSupabaseConfigured(getClientPublicEnv())) return;
 
     let supabase: ReturnType<typeof createSupabaseBrowserClient>;
     try {

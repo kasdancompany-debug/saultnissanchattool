@@ -83,6 +83,7 @@ export async function widgetStartConversation(
     department?: string;
     display_name?: string;
     lead_capture?: Record<string, unknown>;
+    widget_intent?: string;
   }
 ): Promise<
   | {
@@ -156,12 +157,18 @@ export async function widgetPostMessage(
   sessionToken: string,
   text: string
 ): Promise<
-  | { ok: true; id: string; created_at: string }
+  | {
+      ok: true;
+      id: string;
+      created_at: string;
+      assistant_message: WidgetPublicMessage | null;
+    }
   | { ok: false; code: string; message: string }
 > {
   const result = await safeJson<{
     id?: string;
     created_at?: string;
+    assistant_message?: WidgetPublicMessage | null;
     error?: { code?: string; message?: string };
   }>(
     `${apiBase(env)}/api/widget/conversations/${encodeURIComponent(conversationId)}/messages`,
@@ -178,5 +185,10 @@ export async function widgetPostMessage(
   if (!data.id || !data.created_at) {
     return { ok: false, code: "INVALID", message: "Invalid response" };
   }
-  return { ok: true, id: data.id, created_at: data.created_at };
+  return {
+    ok: true,
+    id: data.id,
+    created_at: data.created_at,
+    assistant_message: data.assistant_message ?? null,
+  };
 }

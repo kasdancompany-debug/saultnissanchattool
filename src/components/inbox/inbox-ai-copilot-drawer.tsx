@@ -18,7 +18,9 @@ import {
 } from "@/app/(dashboard)/inbox/conversation-action-states";
 import { dispatchInboxInsertDraft } from "@/lib/inbox/inbox-draft";
 import { markInboxClientRefreshed } from "@/lib/inbox-client-refresh-coord";
+import { cardPanelHeaderClassName } from "@/lib/ui/panel";
 import type { AiCopilotView } from "@/types/ai-copilot";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -48,13 +50,23 @@ function CopilotSection({
   className?: string;
 }) {
   return (
-    <section className={cn("space-y-2", className)}>
-      <h3 className="text-[11px] font-semibold tracking-[0.12em] text-zinc-500 uppercase dark:text-zinc-400">
+    <section className={cn("space-y-2.5", className)}>
+      <h3 className="text-muted-foreground text-xs font-semibold tracking-tight">
         {title}
       </h3>
       {children}
     </section>
   );
+}
+
+function intentLevelBadgeClass(level: "high" | "medium" | "low"): string {
+  if (level === "high") {
+    return "border-emerald-300/80 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-50";
+  }
+  if (level === "medium") {
+    return "border-amber-300/80 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-50";
+  }
+  return "border-slate-300/80 bg-slate-100 text-slate-800 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100";
 }
 
 function IntentLevelBadge({
@@ -64,49 +76,41 @@ function IntentLevelBadge({
   level: "high" | "medium" | "low";
   label: string;
 }) {
-  const styles =
-    level === "high"
-      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-      : level === "medium"
-        ? "border-amber-500/35 bg-amber-500/10 text-amber-200"
-        : "border-zinc-600 bg-zinc-800/60 text-zinc-400";
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-tight",
-        styles
-      )}
-    >
+    <Badge variant="outline" className={cn("text-[11px] font-semibold", intentLevelBadgeClass(level))}>
       {label}
-    </span>
+    </Badge>
   );
 }
 
 function ProbabilityMeter({ value }: { value: number }) {
   const pct = Math.round(Math.max(0, Math.min(100, value)));
   return (
-    <div className="space-y-2">
+    <div className="border-border/80 bg-muted/30 space-y-2.5 rounded-md border px-3 py-2.5">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-2xl font-semibold tracking-tight text-zinc-100 tabular-nums">
+        <span className="text-foreground text-2xl font-semibold tracking-tight tabular-nums">
           {pct}%
         </span>
-        <span className="text-xs text-zinc-500">appointment likelihood</span>
+        <span className="text-muted-foreground text-xs">Appointment likelihood</span>
       </div>
       <div
-        className="h-1.5 overflow-hidden rounded-full bg-zinc-800/80"
+        className="bg-muted h-1.5 overflow-hidden rounded-full"
         role="progressbar"
         aria-valuenow={pct}
         aria-valuemin={0}
         aria-valuemax={100}
       >
         <div
-          className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-[width] duration-500"
+          className="bg-primary h-full rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none"
           style={{ width: `${pct}%` }}
         />
       </div>
     </div>
   );
 }
+
+const insightCardClassName =
+  "border-border/80 bg-muted/25 rounded-md border px-3 py-2.5 text-[13px] leading-relaxed";
 
 export function InboxAiCopilotDrawer({
   conversationId,
@@ -152,12 +156,12 @@ export function InboxAiCopilotDrawer({
       <button
         type="button"
         onClick={() => onOpenChange(true)}
-        className="border-border/60 bg-background/95 hover:bg-muted/40 flex w-11 shrink-0 flex-col items-center justify-center gap-2 border-l px-1 py-4 shadow-sm backdrop-blur-sm transition-colors"
+        className="border-border/60 bg-card hover:bg-muted/40 flex w-11 shrink-0 flex-col items-center justify-center gap-2 border-l px-1 py-4 shadow-[inset_1px_0_0_rgba(15,23,42,0.04)] transition-colors"
         aria-label="Open AI Copilot"
       >
         <Sparkles className="text-primary size-4 shrink-0" strokeWidth={1.5} aria-hidden />
-        <span className="text-muted-foreground text-[10px] font-semibold tracking-wider [writing-mode:vertical-rl]">
-          AI Copilot
+        <span className="text-muted-foreground text-[10px] font-semibold tracking-wide [writing-mode:vertical-rl]">
+          Insights
         </span>
       </button>
     );
@@ -165,21 +169,33 @@ export function InboxAiCopilotDrawer({
 
   return (
     <aside
-      className="border-border/60 bg-zinc-950 text-zinc-100 flex w-[min(100%,22rem)] shrink-0 flex-col border-l shadow-[-12px_0_40px_-16px_rgba(0,0,0,0.45)]"
-      aria-label="AI Copilot"
+      className="border-border/60 bg-card text-card-foreground flex w-[min(100%,22rem)] shrink-0 flex-col border-l shadow-[-8px_0_32px_-12px_rgba(15,23,42,0.08)] dark:shadow-[-8px_0_36px_-12px_rgba(0,0,0,0.35)]"
+      aria-label="Conversation insights"
     >
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-800/80 px-4 py-3.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <Sparkles className="size-4 shrink-0 text-emerald-400" strokeWidth={1.5} aria-hidden />
-          <h2 className="truncate text-sm font-semibold tracking-tight">AI Copilot</h2>
+      <header
+        className={cn(
+          cardPanelHeaderClassName,
+          "shrink-0 gap-2 px-4 py-3"
+        )}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <Sparkles className="text-primary size-4 shrink-0" strokeWidth={1.5} aria-hidden />
+          <div className="min-w-0">
+            <h2 className="text-foreground truncate text-sm font-semibold tracking-tight">
+              Insights
+            </h2>
+            <p className="text-muted-foreground text-[11px] leading-snug">
+              AI suggestions — review before you act
+            </p>
+          </div>
         </div>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="size-8 shrink-0 text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-100"
+          className="text-muted-foreground size-8 shrink-0"
           onClick={() => onOpenChange(false)}
-          aria-label="Collapse AI Copilot"
+          aria-label="Collapse insights panel"
         >
           <ChevronRight className="size-4" aria-hidden />
         </Button>
@@ -188,23 +204,25 @@ export function InboxAiCopilotDrawer({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
         <div className="space-y-6">
           <CopilotSection title="Routing & intent">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-zinc-700/80 bg-zinc-900/80 px-2.5 py-1 text-[11px] font-medium text-zinc-200">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="secondary" className="text-[11px] font-medium">
                 {copilot.routingDepartmentLabel}
-              </span>
+              </Badge>
               <IntentLevelBadge
                 level={copilot.intentLevel}
                 label={copilot.intentLevelLabel}
               />
-              <span className="text-[11px] text-zinc-500 tabular-nums">
+              <Badge variant="outline" className="text-muted-foreground text-[11px] font-normal tabular-nums">
                 Score {Math.round(copilot.opportunityScore)}
-              </span>
+              </Badge>
             </div>
-            <p className="mt-2 text-[13px] leading-snug text-zinc-400">{copilot.intentSummary}</p>
+            <p className="text-muted-foreground text-[13px] leading-snug">
+              {copilot.intentSummary}
+            </p>
           </CopilotSection>
 
           <CopilotSection title="Summary">
-            <p className="text-[13px] leading-relaxed text-zinc-300">{copilot.summary}</p>
+            <p className="text-foreground text-[13px] leading-relaxed">{copilot.summary}</p>
           </CopilotSection>
 
           <CopilotSection title="Suggested next actions">
@@ -212,7 +230,7 @@ export function InboxAiCopilotDrawer({
               {copilot.nextActions.map((action) => (
                 <li
                   key={action}
-                  className="flex gap-2 text-[13px] leading-snug text-zinc-300 before:mt-2 before:size-1 before:shrink-0 before:rounded-full before:bg-emerald-500/80 before:content-['']"
+                  className="text-foreground flex gap-2.5 text-[13px] leading-snug before:bg-primary/70 before:mt-[0.45rem] before:size-1.5 before:shrink-0 before:rounded-full before:content-['']"
                 >
                   {action}
                 </li>
@@ -227,7 +245,7 @@ export function InboxAiCopilotDrawer({
                   <button
                     type="button"
                     onClick={() => insertDraft(reply)}
-                    className="w-full rounded-lg border border-zinc-800/90 bg-zinc-900/60 px-3 py-2.5 text-left text-[13px] leading-snug text-zinc-200 transition-colors hover:border-zinc-700 hover:bg-zinc-900"
+                    className="border-border/80 bg-background hover:border-primary/25 hover:bg-muted/50 focus-visible:ring-ring/50 w-full rounded-md border px-3 py-2.5 text-left text-[13px] leading-snug transition-colors focus-visible:ring-2 focus-visible:outline-none"
                   >
                     {reply}
                   </button>
@@ -237,21 +255,21 @@ export function InboxAiCopilotDrawer({
           </CopilotSection>
 
           <CopilotSection title="Customer profile">
-            <div className="rounded-lg border border-zinc-800/90 bg-zinc-900/50 px-3 py-2.5 text-[13px]">
-              <p className="font-medium text-zinc-100">{copilot.customerProfile.displayName}</p>
+            <div className={insightCardClassName}>
+              <p className="text-foreground font-medium">{copilot.customerProfile.displayName}</p>
               {copilot.customerProfile.email ? (
-                <p className="mt-1 text-zinc-400">{copilot.customerProfile.email}</p>
+                <p className="text-muted-foreground mt-1">{copilot.customerProfile.email}</p>
               ) : null}
               {copilot.customerProfile.phoneE164 ? (
-                <p className="text-zinc-400">{copilot.customerProfile.phoneE164}</p>
+                <p className="text-muted-foreground">{copilot.customerProfile.phoneE164}</p>
               ) : null}
               {copilot.customerProfile.missingFields.length > 0 ? (
-                <p className="mt-2 text-[12px] text-amber-200/90">
+                <p className="mt-2 text-[12px] text-amber-800 dark:text-amber-100/90">
                   Still need: {copilot.customerProfile.missingFields.join(", ")}
                 </p>
               ) : null}
               {copilot.customerProfile.notes ? (
-                <p className="mt-2 border-t border-zinc-800/80 pt-2 text-zinc-400">
+                <p className="text-muted-foreground border-border/70 mt-2 border-t pt-2">
                   {copilot.customerProfile.notes}
                 </p>
               ) : null}
@@ -261,11 +279,10 @@ export function InboxAiCopilotDrawer({
           <CopilotSection title="Likely objections">
             <ul className="flex flex-wrap gap-1.5">
               {copilot.likelyObjections.map((item) => (
-                <li
-                  key={item}
-                  className="rounded-full border border-zinc-700/80 bg-zinc-900/80 px-2.5 py-1 text-[11px] text-zinc-300"
-                >
-                  {item}
+                <li key={item}>
+                  <Badge variant="outline" className="text-[11px] font-normal">
+                    {item}
+                  </Badge>
                 </li>
               ))}
             </ul>
@@ -278,7 +295,7 @@ export function InboxAiCopilotDrawer({
           <CopilotSection title="Recommended inventory">
             <ul className="space-y-1.5">
               {copilot.recommendedInventory.map((item) => (
-                <li key={item} className="text-[13px] leading-snug text-zinc-300">
+                <li key={item} className="text-foreground text-[13px] leading-snug">
                   {item}
                 </li>
               ))}
@@ -287,33 +304,33 @@ export function InboxAiCopilotDrawer({
         </div>
       </div>
 
-      <footer className="shrink-0 space-y-2 border-t border-zinc-800/80 px-4 py-3.5">
-        <p className="text-[10px] font-semibold tracking-[0.12em] text-zinc-500 uppercase">
+      <footer className="border-border shrink-0 space-y-2.5 border-t bg-muted/25 px-4 py-3.5">
+        <p className="text-muted-foreground text-xs font-semibold tracking-tight">
           Quick actions
         </p>
         <div className="grid grid-cols-2 gap-2">
           <Button
             type="button"
             size="sm"
-            variant="secondary"
-            className="h-9 justify-start gap-1.5 border-zinc-700/60 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+            variant="outline"
+            className="h-9 justify-start gap-1.5"
             onClick={() => insertDraft(copilot.primaryDraftReply)}
           >
-            <MessageSquare className="size-3.5 shrink-0 opacity-80" aria-hidden />
+            <MessageSquare className="size-3.5 shrink-0 opacity-70" aria-hidden />
             Generate reply
           </Button>
           <Button
             type="button"
             size="sm"
-            variant="secondary"
-            className="h-9 justify-start gap-1.5 border-zinc-700/60 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+            variant="outline"
+            className="h-9 justify-start gap-1.5"
             onClick={() =>
               insertDraft(
                 "I'd love to get you in for a visit. What day and time works best for a test drive or quick appointment?"
               )
             }
           >
-            <Calendar className="size-3.5 shrink-0 opacity-80" aria-hidden />
+            <Calendar className="size-3.5 shrink-0 opacity-70" aria-hidden />
             Book appointment
           </Button>
           <form action={formAction} className="contents">
@@ -322,11 +339,11 @@ export function InboxAiCopilotDrawer({
             <Button
               type="submit"
               size="sm"
-              variant="secondary"
+              variant="outline"
               disabled={isPending}
-              className="h-9 w-full justify-start gap-1.5 border-zinc-700/60 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+              className="h-9 w-full justify-start gap-1.5"
             >
-              <AlertTriangle className="size-3.5 shrink-0 opacity-80" aria-hidden />
+              <AlertTriangle className="size-3.5 shrink-0 opacity-70" aria-hidden />
               Escalate
             </Button>
           </form>
@@ -334,11 +351,11 @@ export function InboxAiCopilotDrawer({
             <Button
               type="button"
               size="sm"
-              variant="secondary"
-              className="h-9 justify-start gap-1.5 border-zinc-700/60 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+              variant="outline"
+              className="h-9 justify-start gap-1.5"
               onClick={scrollToAssign}
             >
-              <UserPlus className="size-3.5 shrink-0 opacity-80" aria-hidden />
+              <UserPlus className="size-3.5 shrink-0 opacity-70" aria-hidden />
               Assign owner
             </Button>
           ) : (
@@ -348,11 +365,11 @@ export function InboxAiCopilotDrawer({
               <Button
                 type="submit"
                 size="sm"
-                variant="secondary"
+                variant="outline"
                 disabled={isPending}
-                className="h-9 w-full justify-start gap-1.5 border-zinc-700/60 bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
+                className="h-9 w-full justify-start gap-1.5"
               >
-                <UserPlus className="size-3.5 shrink-0 opacity-80" aria-hidden />
+                <UserPlus className="size-3.5 shrink-0 opacity-70" aria-hidden />
                 Assign owner
               </Button>
             </form>
@@ -364,8 +381,8 @@ export function InboxAiCopilotDrawer({
           </p>
         ) : null}
         {copilot.classification ? (
-          <p className="text-[10px] leading-snug text-zinc-600">
-            AI assist · review before sending · never auto-sent
+          <p className="text-muted-foreground text-[11px] leading-snug">
+            Drafts are suggestions only — never sent automatically.
           </p>
         ) : null}
       </footer>
@@ -416,7 +433,7 @@ export function InboxAiCopilotShell({
           onOpenChange={setOpen}
         />
       ) : (
-        <div className="border-border/60 w-11 shrink-0 border-l" aria-hidden />
+        <div className="border-border/60 bg-card w-11 shrink-0 border-l" aria-hidden />
       )}
     </div>
   );

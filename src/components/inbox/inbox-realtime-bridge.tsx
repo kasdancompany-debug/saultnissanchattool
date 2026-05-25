@@ -4,7 +4,8 @@ import { startTransition, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import { createSupabaseBrowserClient } from "@/integrations/supabase/browser";
-import { isSupabaseConfigured, publicEnv } from "@/lib/env/public";
+import { getClientPublicEnv } from "@/lib/env/client-public-env";
+import { isSupabaseConfigured } from "@/lib/env/public";
 import { shouldSuppressRealtimeInboxRefresh } from "@/lib/inbox-client-refresh-coord";
 import {
   inboxRealtimeRefreshDedupeKey,
@@ -60,7 +61,8 @@ export function InboxRealtimeBridge({
 }) {
   const router = useRouter();
   const supabase = useMemo(() => {
-    if (!isSupabaseConfigured(publicEnv)) {
+    const env = getClientPublicEnv();
+    if (!isSupabaseConfigured(env)) {
       return null;
     }
     try {

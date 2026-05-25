@@ -4,6 +4,16 @@
 
 import type { Json } from "@/integrations/supabase/database.types";
 
+/** Topic picked on the widget menu (`widget_intent` / `intake_intent`). */
+export function readWidgetIntakeIntent(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+  const w = (metadata as { widget?: { intake_intent?: string } }).widget;
+  const intent = w?.intake_intent?.trim();
+  return intent && intent.length > 0 ? intent : null;
+}
+
 export function isAfterHoursWebChatIntake(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return false;

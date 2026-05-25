@@ -1,14 +1,16 @@
 import type { ConversationChannel, ConversationStatus } from "@/integrations/supabase/database.types";
-import { resolveInboxChannelSurface } from "@/lib/conversation/inbox-channel-surface";
+import {
+  classifyLeadSource,
+  type LeadSourceKey,
+} from "@/lib/analytics/lead-source-attribution";
+import {
+  hasAppointmentBooked,
+  isQualifiedLead,
+  isSoldVehicle,
+} from "@/lib/conversation/pipeline-outcomes";
 import { readOpportunityFromMetadata } from "@/lib/opportunity/metadata";
 
-export type LeadSourceKey =
-  | "website"
-  | "sms"
-  | "facebook"
-  | "instagram"
-  | "google_ads"
-  | "organic";
+export type { LeadSourceKey } from "@/lib/analytics/lead-source-attribution";
 
 export type ExecutiveHeroMetrics = {
   appointmentsBooked: number;
@@ -28,7 +30,6 @@ export type ExecutiveLeadSourceRow = {
 };
 
 export type ExecutiveSalesFunnel = {
-  visitors: number;
   conversations: number;
   qualifiedLeads: number;
   appointments: number;
@@ -51,88 +52,8 @@ type ConversationRow = {
   created_at: string;
 };
 
-const APPOINTMENT_RE =
-  /\b(appointment|book(?:ing)?|schedule|test drive|come in|visit)\b/i;
-
-const SOLD_RE = /\b(purchased|bought|sold|delivery|picked up|took delivery)\b/i;
-
-/** Conservative per qualified lead for “gross influenced” storytelling (not accounting). */
-const GROSS_PER_QUALIFIED_LEAD = 4_200;
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
-
-function isGoogleAdsAttribution(metadata: unknown): boolean {
-  const blob = JSON.stringify(metadata).toLowerCase();
-  return (
-    /gclid|utm_source=google|google_ads|utm_medium=cpc|utm_medium=ppc|utm_campaign=/.test(
-      blob
-    )
-  );
-}
-
-function isOrganicWeb(metadata: unknown): boolean {
-  const widget = asRecord(asRecord(metadata).widget);
-  const utm = asRecord(widget.utm ?? asRecord(metadata).utm);
-  if (Object.keys(utm).length > 0) return false;
-  const ref = typeof widget.referrer === "string" ? widget.referrer : "";
-  if (!ref || /direct|none|\(not set\)/i.test(ref)) return true;
-  return false;
-}
-
-function classifyLeadSource(row: ConversationRow): LeadSourceKey {
-  const surface = resolveInboxChannelSurface({
-    channel: row.channel,
-    metadata: row.metadata,
-    title: row.title,
-  });
-
-  if (surface === "sms") return "sms";
-  if (surface === "instagram") return "instagram";
-  if (surface === "messenger") return "facebook";
-
-  if (surface === "web_chat" || row.channel === "web_chat") {
-    if (isGoogleAdsAttribution(row.metadata)) return "google_ads";
-    if (isOrganicWeb(row.metadata)) return "organic";
-    return "website";
-  }
-
-  if (row.channel === "facebook") return "facebook";
-  return "website";
-}
-
-function hasAppointmentSignal(row: ConversationRow): boolean {
-  const opp = readOpportunityFromMetadata(row.metadata);
-  if (opp?.signals.some((s) => s.id === "appointment" && s.active)) return true;
-
-  const lead = asRecord(asRecord(row.metadata).lead_capture);
-  const intent = typeof lead.intent === "string" ? lead.intent : "";
-  if (/book|appointment|test/.test(intent)) return true;
-
-  const blob = JSON.stringify(row.metadata);
-  return APPOINTMENT_RE.test(blob);
-}
-
-function isQualifiedLead(row: ConversationRow): boolean {
-  const opp = readOpportunityFromMetadata(row.metadata);
-  if (opp && opp.score >= 50) return true;
-  if (asRecord(row.metadata).lead_capture) return true;
-  if (row.department === "sales" || row.department === "bdc") {
-    return hasAppointmentSignal(row) || (opp?.score ?? 0) >= 40;
-  }
-  return false;
-}
-
-function isSoldVehicle(row: ConversationRow): boolean {
-  if (row.department !== "sales") return false;
-  if (row.status !== "closed" && row.status !== "resolved") return false;
-  const blob = JSON.stringify(row.metadata);
-  return SOLD_RE.test(blob) || asRecord(row.metadata).sold === true;
-}
+/** Modeled gross per staff-confirmed qualified lead (not accounting). */
+export const GROSS_PER_STAFF_QUALIFIED_LEAD = 4_200;
 
 export function formatGrossCurrency(amount: number): string {
   if (amount >= 1_000_000) {
@@ -172,12 +93,21 @@ export function computeExecutiveOverviewMetrics(input: {
   ]);
 
   for (const row of periodRows) {
-    const src = classifyLeadSource(row);
+    const src = classifyLeadSource({
+      channel: row.channel,
+      metadata: row.metadata,
+      title: row.title,
+    });
     sourceCounts.set(src, (sourceCounts.get(src) ?? 0) + 1);
 
-    if (hasAppointmentSignal(row)) appointmentsBooked += 1;
-    if (isQualifiedLead(row)) qualifiedLeads += 1;
-    if (isSoldVehicle(row)) soldVehicles += 1;
+    const metricsInput = {
+      status: row.status,
+      department: row.department,
+      metadata: row.metadata,
+    };
+    if (hasAppointmentBooked(metricsInput)) appointmentsBooked += 1;
+    if (isQualifiedLead(metricsInput)) qualifiedLeads += 1;
+    if (isSoldVehicle(metricsInput)) soldVehicles += 1;
   }
 
   let hotLeadsActive = 0;
@@ -191,12 +121,7 @@ export function computeExecutiveOverviewMetrics(input: {
       ? Math.round((qualifiedLeads / conversationsStarted) * 1000) / 10
       : null;
 
-  const estimatedGrossInfluenced = qualifiedLeads * GROSS_PER_QUALIFIED_LEAD;
-
-  const visitors = Math.max(
-    conversationsStarted,
-    Math.round(conversationsStarted * 2.4)
-  );
+  const estimatedGrossInfluenced = qualifiedLeads * GROSS_PER_STAFF_QUALIFIED_LEAD;
 
   const leadSourceOrder: { key: LeadSourceKey; label: string }[] = [
     { key: "website", label: "Website" },
@@ -225,7 +150,6 @@ export function computeExecutiveOverviewMetrics(input: {
       count: sourceCounts.get(key) ?? 0,
     })),
     funnel: {
-      visitors,
       conversations: conversationsStarted,
       qualifiedLeads,
       appointments: appointmentsBooked,

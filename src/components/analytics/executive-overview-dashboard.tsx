@@ -73,7 +73,7 @@ function HeroMetric({
     <WarRoomShell
       delayMs={delayMs}
       className={cn(
-        "group relative overflow-hidden p-5 sm:p-6",
+        "group relative flex h-full min-h-[8.5rem] flex-col overflow-hidden p-5 sm:min-h-[9rem] sm:p-6",
         href && "transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-lg"
       )}
     >
@@ -84,7 +84,7 @@ function HeroMetric({
         )}
         aria-hidden
       />
-      <div className="relative flex flex-col gap-3">
+      <div className="relative flex min-h-0 flex-1 flex-col gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xl leading-none" aria-hidden>
             {icon}
@@ -96,21 +96,30 @@ function HeroMetric({
         <p className="text-foreground font-black tabular-nums tracking-[-0.05em] text-[clamp(2rem,4.5vw,3.25rem)] leading-[0.92]">
           {value}
         </p>
-        {sub ? (
-          <p className="text-muted-foreground/90 text-[11px] font-medium leading-snug">{sub}</p>
-        ) : null}
+        <p
+          className={cn(
+            "text-muted-foreground/90 mt-auto min-h-[2.5rem] text-[11px] font-medium leading-snug",
+            !sub && "invisible"
+          )}
+          aria-hidden={!sub}
+        >
+          {sub ?? "\u00a0"}
+        </p>
       </div>
     </WarRoomShell>
   );
 
   if (href) {
     return (
-      <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 rounded-xl">
+      <Link
+        href={href}
+        className="flex h-full min-h-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/55 rounded-xl"
+      >
         {inner}
       </Link>
     );
   }
-  return inner;
+  return <div className="flex h-full min-h-0">{inner}</div>;
 }
 
 function LeadSourcesRow({
@@ -120,8 +129,8 @@ function LeadSourcesRow({
   sources: ExecutiveLeadSourceRow[];
   delayMs: number;
 }) {
-  const total = sources.reduce((a, s) => a + s.count, 0) || 1;
-  const max = Math.max(...sources.map((s) => s.count), 1);
+  const total = sources.reduce((a, s) => a + s.count, 0);
+  const max = Math.max(...sources.map((s) => s.count), 0);
 
   return (
     <WarRoomShell delayMs={delayMs} className="p-6 sm:p-8">
@@ -133,13 +142,14 @@ function LeadSourcesRow({
           </h2>
         </div>
         <p className="text-muted-foreground text-[11px] font-medium tabular-nums">
-          {total} conversations attributed
+          {total === 1 ? "1 conversation attributed" : `${total} conversations attributed`}
         </p>
       </div>
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {sources.map((src) => {
-          const pct = Math.round((src.count / total) * 100);
-          const widthPct = Math.max(8, Math.round((src.count / max) * 100));
+          const pct = total > 0 ? Math.round((src.count / total) * 100) : 0;
+          const widthPct =
+            src.count > 0 && max > 0 ? Math.round((src.count / max) * 100) : 0;
           return (
             <li key={src.key} className="space-y-2">
               <div className="flex items-baseline justify-between gap-2">
@@ -151,11 +161,16 @@ function LeadSourcesRow({
                   <span className="text-muted-foreground/70 font-medium"> · {pct}%</span>
                 </span>
               </div>
-              <div className="bg-muted/40 h-1.5 overflow-hidden rounded-full">
-                <div
-                  className="bg-primary/70 h-full rounded-full transition-[width] duration-1000 ease-out motion-reduce:transition-none"
-                  style={{ width: `${widthPct}%` }}
-                />
+              <div
+                className="bg-muted/40 h-1.5 overflow-hidden rounded-full"
+                aria-hidden={src.count === 0}
+              >
+                {src.count > 0 ? (
+                  <div
+                    className="bg-primary/70 h-full rounded-full transition-[width] duration-1000 ease-out motion-reduce:transition-none"
+                    style={{ width: `${widthPct}%` }}
+                  />
+                ) : null}
               </div>
             </li>
           );
@@ -213,7 +228,6 @@ function FunnelConnector() {
 
 function SalesFunnelRow({ funnel, delayMs }: { funnel: ExecutiveSalesFunnel; delayMs: number }) {
   const stages: { label: string; value: number }[] = [
-    { label: "Visitors", value: funnel.visitors },
     { label: "Conversations", value: funnel.conversations },
     { label: "Qualified leads", value: funnel.qualifiedLeads },
     { label: "Appointments", value: funnel.appointments },
@@ -228,8 +242,9 @@ function SalesFunnelRow({ funnel, delayMs }: { funnel: ExecutiveSalesFunnel; del
           Sales funnel
         </h2>
         <p className="text-muted-foreground mt-2 max-w-lg text-[11px] leading-relaxed">
-          End-to-end progression for the reporting window. Visitors are modeled from chat
-          engagement; sold units reflect closed sales threads.
+          Conversations started in the reporting window. Qualified, appointments, and sold
+          count only when a teammate marks them in Inbox — booking intent in chat does not
+          count until confirmed.
         </p>
       </div>
       <div className="flex flex-col items-stretch gap-6 overflow-x-auto pb-1 sm:flex-row sm:items-center sm:gap-0">
@@ -283,7 +298,7 @@ export function ExecutiveOverviewDashboard({
           icon="🚗"
           label="Appointments booked"
           value={String(hero.appointmentsBooked)}
-          sub="Threads with booking intent or scheduled visit"
+          sub="Staff-confirmed in Inbox (Appointment booked mark)"
           delayMs={75}
           accent="emerald"
         />
@@ -291,7 +306,7 @@ export function ExecutiveOverviewDashboard({
           icon="💰"
           label="Est. gross influenced"
           value={hero.estimatedGrossLabel}
-          sub="Modeled from qualified leads in period"
+          sub="Staff-qualified leads × $4.2K model (not actual gross)"
           delayMs={150}
           accent="amber"
         />
@@ -299,7 +314,7 @@ export function ExecutiveOverviewDashboard({
           icon="📈"
           label="Lead conversion rate"
           value={hero.leadConversionRateLabel}
-          sub="Qualified leads ÷ new conversations"
+          sub="Staff-qualified ÷ conversations started"
           delayMs={225}
           accent="violet"
         />

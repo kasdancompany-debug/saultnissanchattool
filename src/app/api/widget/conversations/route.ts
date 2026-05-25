@@ -100,6 +100,7 @@ export async function POST(request: Request) {
       phoneE164: parsed.data.phone_e164,
       userAgent: ua,
       leadCapture: parsed.data.lead_capture ?? null,
+      widgetIntent: parsed.data.widget_intent ?? null,
     },
     secrets.WIDGET_SESSION_SECRET
   );

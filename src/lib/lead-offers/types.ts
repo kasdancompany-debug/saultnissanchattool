@@ -39,3 +39,15 @@ export type DealershipLeadOfferAnalytics = {
   };
   byOffer: LeadOfferMetrics[];
 };
+
+/** Used when `lead_offers` migration has not been applied yet. */
+export const EMPTY_LEAD_OFFER_ANALYTICS: DealershipLeadOfferAnalytics = {
+  totals: {
+    views: 0,
+    starts: 0,
+    completes: 0,
+    leads: 0,
+    completionRate: null,
+  },
+  byOffer: [],
+};

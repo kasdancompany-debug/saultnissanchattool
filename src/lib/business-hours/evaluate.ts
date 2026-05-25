@@ -41,12 +41,17 @@ const SHORT_WEEKDAY_TO_KEY: Record<string, WeekdayKey> = {
 };
 
 export function getWeekdayKeyInTimezone(date: Date, timeZone: string): WeekdayKey {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    weekday: "short",
-  }).formatToParts(date);
-  const w = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
-  return SHORT_WEEKDAY_TO_KEY[w] ?? "mon";
+  const tz = timeZone?.trim() || "UTC";
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      weekday: "short",
+    }).formatToParts(date);
+    const w = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
+    return SHORT_WEEKDAY_TO_KEY[w] ?? "mon";
+  } catch {
+    return "mon";
+  }
 }
 
 function parseHHMM(s: string): number {
@@ -55,12 +60,18 @@ function parseHHMM(s: string): number {
 }
 
 function getMinutesSinceMidnightInTimezone(date: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
+  const tz = timeZone?.trim() || "UTC";
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(date);
+  } catch {
+    return 0;
+  }
 
   const map: Record<string, string> = {};
   for (const p of parts) {
@@ -113,40 +124,49 @@ export function evaluateLiveHours(
   department: StaffDepartment,
   now: Date = new Date()
 ): LiveHoursEvaluation {
-  const tz = config.timezone;
-  const { schedule, schedule_key } = resolveWeeklyScheduleForDepartment(
-    department,
-    config
-  );
-  const day = getWeekdayKeyInTimezone(now, tz);
-  const minutes = getMinutesSinceMidnightInTimezone(now, tz);
-  const within = isWithinDayWindow(day, schedule, minutes);
+  try {
+    const tz = config.timezone?.trim() || "America/Toronto";
+    const { schedule, schedule_key } = resolveWeeklyScheduleForDepartment(
+      department,
+      config
+    );
+    const day = getWeekdayKeyInTimezone(now, tz);
+    const minutes = getMinutesSinceMidnightInTimezone(now, tz);
+    const within = isWithinDayWindow(day, schedule, minutes);
 
-  return {
-    within_live_hours: within,
-    after_hours: !within,
-    timezone: tz,
-    schedule_key,
-    evaluated_at: now.toISOString(),
-  };
+    return {
+      within_live_hours: within,
+      after_hours: !within,
+      timezone: tz,
+      schedule_key,
+      evaluated_at: now.toISOString(),
+    };
+  } catch {
+    return {
+      within_live_hours: true,
+      after_hours: false,
+      timezone: config.timezone?.trim() || "America/Toronto",
+      schedule_key: "web_chat",
+      evaluated_at: now.toISOString(),
+    };
+  }
 }
 
 /**
  * Short label for display (e.g. "Eastern Time") — best-effort via Intl.
  */
 export function formatTimezoneShortLabel(ianaTimezone: string): string {
+  const tz = ianaTimezone?.trim();
+  if (!tz) return "Local time";
   try {
-    const d = new Date();
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: ianaTimezone,
-      timeZoneName: "longGeneric",
-    }).formatToParts(d);
-    const name = parts.find((p) => p.type === "timeZoneName")?.value;
-    if (name) {
-      return name;
-    }
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      timeZoneName: "short",
+    }).formatToParts(new Date());
+    const name = parts.find((p) => p.type === "timeZoneName")?.value?.trim();
+    if (name) return name;
   } catch {
-    // fall through
+    // invalid IANA or unsupported Intl option
   }
-  return ianaTimezone.replace(/_/g, " ");
+  return tz.replace(/_/g, " ");
 }

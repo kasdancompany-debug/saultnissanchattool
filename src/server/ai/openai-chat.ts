@@ -10,11 +10,14 @@ export type ChatCompletionMessage = {
 /**
  * Minimal OpenAI-compatible Chat Completions caller (`POST {OPENAI_BASE_URL}/chat/completions`; no SDK).
  */
-export async function openaiChatCompletionsJson(params: {
-  model: string;
-  messages: ChatCompletionMessage[];
-  temperature?: number;
-}): Promise<{ content: string; raw: unknown }> {
+export async function openaiChatCompletionsJson(
+  params: {
+    model: string;
+    messages: ChatCompletionMessage[];
+    temperature?: number;
+  },
+  signal?: AbortSignal
+): Promise<{ content: string; raw: unknown }> {
   const env = getInboundClassificationEnv();
   const key = env.OPENAI_API_KEY;
   const url = `${env.OPENAI_BASE_URL}/chat/completions`;
@@ -31,6 +34,7 @@ export async function openaiChatCompletionsJson(params: {
       temperature: params.temperature ?? 0.2,
       response_format: { type: "json_object" },
     }),
+    signal,
   });
 
   const raw = (await res.json()) as Record<string, unknown>;

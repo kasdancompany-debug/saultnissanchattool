@@ -2,13 +2,17 @@ import "server-only";
 
 import type { StaffDepartment } from "@/integrations/supabase/database.types";
 import { createSupabaseAdminClient } from "@/integrations/supabase/admin";
-import type {
-  DealershipLeadOfferAnalytics,
-  LeadOfferEventType,
-  LeadOfferRow,
+import {
+  EMPTY_LEAD_OFFER_ANALYTICS,
+  type DealershipLeadOfferAnalytics,
+  type LeadOfferEventType,
+  type LeadOfferRow,
 } from "@/lib/lead-offers/types";
 import { resolveDb } from "@/server/data/internal";
-import { fromPostgrestError } from "@/server/data/postgrest-error";
+import {
+  fromPostgrestError,
+  isMissingSchemaTableError,
+} from "@/server/data/postgrest-error";
 import type { TypedSupabaseClient } from "@/server/db/server-client";
 import { ok, type Result } from "@/server/result";
 
@@ -177,8 +181,18 @@ export async function loadLeadOfferAnalytics(
       .gte("created_at", sinceIso),
   ]);
 
-  if (offersRes.error) return fromPostgrestError(offersRes.error);
-  if (eventsRes.error) return fromPostgrestError(eventsRes.error);
+  if (offersRes.error) {
+    if (isMissingSchemaTableError(offersRes.error, "lead_offers")) {
+      return ok(EMPTY_LEAD_OFFER_ANALYTICS);
+    }
+    return fromPostgrestError(offersRes.error);
+  }
+  if (eventsRes.error) {
+    if (isMissingSchemaTableError(eventsRes.error, "lead_offer_events")) {
+      return ok(EMPTY_LEAD_OFFER_ANALYTICS);
+    }
+    return fromPostgrestError(eventsRes.error);
+  }
 
   const nameById = new Map(
     (offersRes.data ?? []).map((o) => [o.id, o.name] as const)

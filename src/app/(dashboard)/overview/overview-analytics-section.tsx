@@ -31,7 +31,5 @@ export async function OverviewAnalyticsSection() {
     );
   }
 
-  return (
-    <ExecutiveOverviewDashboard data={analyticsRes.data} />
-  );
+  return <ExecutiveOverviewDashboard data={analyticsRes.data} />;
 }

@@ -8,6 +8,10 @@ import { computeOpportunityScore } from "@/lib/opportunity/compute-opportunity";
 import { readAiInsightsFromMetadata } from "@/lib/conversation/ai-insights-metadata";
 import { readOpportunityFromMetadata } from "@/lib/opportunity/metadata";
 import { opportunityBandLabel } from "@/lib/opportunity/score-band";
+import {
+  aggregateProfileHintsFromTexts,
+  profileFieldsStillMissing,
+} from "@/lib/conversation/extract-profile-hints";
 
 const DEPARTMENT_LABEL: Record<StaffDepartment, string> = {
   sales: "Sales",
@@ -232,15 +236,19 @@ export function buildAiCopilotView(input: {
     .filter(Boolean)
     .join(" · ");
 
+  const extractedFromChat = aggregateProfileHintsFromTexts(
+    input.messages
+      .filter((m) => m.sender_type === "customer")
+      .map((m) => m.body ?? "")
+  );
   const missingFields =
     aiInsights?.missing_profile_fields ??
-    [
-      ...(!input.customerDisplayName || input.customerDisplayName === "Website visitor"
-        ? ["name"]
-        : []),
-      ...(!input.customerPhoneE164 ? ["phone"] : []),
-      ...(!input.customerEmail ? ["email"] : []),
-    ];
+    profileFieldsStillMissing({
+      displayName: input.customerDisplayName,
+      email: input.customerEmail,
+      phoneE164: input.customerPhoneE164,
+      extracted: extractedFromChat,
+    });
 
   const primaryDraft =
     input.assist?.safeDraftReply.trim() ||

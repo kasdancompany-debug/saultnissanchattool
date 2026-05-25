@@ -3,48 +3,45 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createSupabaseBrowserClient } from "@/integrations/supabase/browser";
-import { isSupabaseConfigured, publicEnv } from "@/lib/env/public";
+import { getClientPublicEnv } from "@/lib/env/client-public-env";
+import { isSupabaseConfigured } from "@/lib/env/public";
 import {
-  COMPLETED_CONVERSATION_STATUSES,
-  OPEN_QUEUE_STATUSES,
-} from "@/lib/conversation/status-sets";
+  computeInboxQueueCountsFromRows,
+  closedStatusesForInboxCounts,
+  openStatusesForInboxCounts,
+  EMPTY_INBOX_QUEUE_COUNTS,
+  type InboxQueueCounts,
+} from "@/lib/inbox/compute-queue-counts";
 
-export type InboxQueueCounts = {
-  allOpen: number;
-  unassigned: number;
-  waitingHuman: number;
-  mine: number;
-  sales: number;
-  service: number;
-  closed: number;
-};
-
-const initial: InboxQueueCounts = {
-  allOpen: 0,
-  unassigned: 0,
-  waitingHuman: 0,
-  mine: 0,
-  sales: 0,
-  service: 0,
-  closed: 0,
-};
+export type { InboxQueueCounts };
 
 /**
- * Client-side head counts for inbox tabs and status strip (RLS-scoped; same rules as list loaders).
+ * Client-side head counts for inbox tabs and status strip (RLS-scoped).
+ * Prefer `initialCounts` from the server so badges match the list on first paint.
  */
 export function useInboxQueueCounts(
   dealershipId: string,
   staffUserId: string,
   pollMs = 45_000,
-  includeDealershipWide = true
+  includeDealershipWide = true,
+  initialCounts?: InboxQueueCounts
 ): { counts: InboxQueueCounts; loading: boolean; error: boolean } {
-  const [counts, setCounts] = useState<InboxQueueCounts>(initial);
-  const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState<InboxQueueCounts>(
+    initialCounts ?? EMPTY_INBOX_QUEUE_COUNTS
+  );
+  const [loading, setLoading] = useState(!initialCounts);
   const [error, setError] = useState(false);
   const mounted = useRef(true);
 
   const load = useCallback(async () => {
-    if (!isSupabaseConfigured(publicEnv)) {
+    const env = getClientPublicEnv();
+    if (!isSupabaseConfigured(env)) {
+      if (initialCounts) {
+        setCounts(initialCounts);
+        setError(false);
+        setLoading(false);
+        return;
+      }
       setLoading(false);
       setError(true);
       return;
@@ -53,13 +50,18 @@ export function useInboxQueueCounts(
     try {
       supabase = createSupabaseBrowserClient();
     } catch {
+      if (initialCounts) {
+        setCounts(initialCounts);
+        setError(false);
+      } else {
+        setError(true);
+      }
       setLoading(false);
-      setError(true);
       return;
     }
 
-    const openStatuses = [...OPEN_QUEUE_STATUSES];
-    const closedStatuses = [...COMPLETED_CONVERSATION_STATUSES];
+    const openStatuses = openStatusesForInboxCounts();
+    const closedStatuses = closedStatusesForInboxCounts();
 
     try {
       const [openRowsRes, closedCountRes] = await Promise.all([
@@ -77,7 +79,12 @@ export function useInboxQueueCounts(
 
       if (openRowsRes.error || closedCountRes.error) {
         if (mounted.current) {
-          setError(true);
+          if (initialCounts) {
+            setCounts(initialCounts);
+            setError(false);
+          } else {
+            setError(true);
+          }
           setLoading(false);
         }
         return;
@@ -85,48 +92,28 @@ export function useInboxQueueCounts(
 
       if (!mounted.current) return;
 
-      const openRows = openRowsRes.data ?? [];
-      let allOpen = 0;
-      let unassigned = 0;
-      let waitingHuman = 0;
-      let mine = 0;
-      let sales = 0;
-      let service = 0;
-
-      for (const row of openRows) {
-        allOpen += 1;
-        if (row.assigned_to_user_id == null) {
-          unassigned += 1;
-        }
-        if (row.status === "waiting_for_human") {
-          waitingHuman += 1;
-        }
-        if (row.assigned_to_user_id === staffUserId) {
-          mine += 1;
-        }
-        if (row.department === "sales") {
-          sales += 1;
-        } else if (row.department === "service") {
-          service += 1;
-        }
-      }
-
-      setCounts({
-        allOpen: includeDealershipWide ? allOpen : mine + unassigned,
-        unassigned,
-        waitingHuman: includeDealershipWide ? waitingHuman : 0,
-        mine,
-        sales: includeDealershipWide ? sales : 0,
-        service: includeDealershipWide ? service : 0,
-        closed: includeDealershipWide ? (closedCountRes.count ?? 0) : 0,
-      });
+      setCounts(
+        computeInboxQueueCountsFromRows(
+          openRowsRes.data ?? [],
+          closedCountRes.count ?? 0,
+          staffUserId,
+          includeDealershipWide
+        )
+      );
       setError(false);
     } catch {
-      if (mounted.current) setError(true);
+      if (mounted.current) {
+        if (initialCounts) {
+          setCounts(initialCounts);
+          setError(false);
+        } else {
+          setError(true);
+        }
+      }
     } finally {
       if (mounted.current) setLoading(false);
     }
-  }, [dealershipId, staffUserId, includeDealershipWide]);
+  }, [dealershipId, staffUserId, includeDealershipWide, initialCounts]);
 
   useEffect(() => {
     mounted.current = true;
@@ -139,7 +126,8 @@ export function useInboxQueueCounts(
   }, [load, pollMs]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured(publicEnv)) return;
+    const env = getClientPublicEnv();
+    if (!isSupabaseConfigured(env)) return;
     let supabase: ReturnType<typeof createSupabaseBrowserClient>;
     try {
       supabase = createSupabaseBrowserClient();

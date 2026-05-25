@@ -3,8 +3,10 @@ import { normalizeE164 } from "@/lib/phone/e164";
 const EMAIL_IN_TEXT_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
 const PHONE_HINT_RE = /(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?){2}\d{4}\b/;
 const NAME_PATTERNS = [
-  /\b(?:my name is|i am|i'm|im|this is)\s+([a-z][a-z' -]{1,60})\b/i,
+  /\b(?:my name is|name is|i am|i'm|im|this is)\s+([a-z][a-z' -]{1,48})(?:\s+and\b|\s*[,.\n]|$)/i,
   /\b(?:^|\n)([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+here\b/,
+  /\b(?:i'm|im)\s+([a-z][a-z' -]{1,40})\b/i,
+  /^([a-z][a-z' -]{1,40})\s*[,.\-–—]?\s*(?:my phone|phone|cell|number|\d{3})/i,
 ];
 
 export type ExtractedProfileHints = {
@@ -44,6 +46,20 @@ const PLACEHOLDER_NAMES = new Set([
 export function isPlaceholderCustomerName(name: string | null | undefined): boolean {
   const n = name?.trim().toLowerCase() ?? "";
   return n.length === 0 || PLACEHOLDER_NAMES.has(n);
+}
+
+/** Merge profile hints from every customer message in the thread (oldest → newest). */
+export function aggregateProfileHintsFromTexts(texts: string[]): ExtractedProfileHints {
+  let acc: ExtractedProfileHints = {
+    name: null,
+    email: null,
+    phoneE164: null,
+  };
+  for (const text of texts) {
+    const h = extractProfileHintsFromText(text);
+    acc = mergeExtractedCustomerProfile({ fromModel: acc, fromHeuristics: h });
+  }
+  return acc;
 }
 
 export function mergeExtractedCustomerProfile(input: {

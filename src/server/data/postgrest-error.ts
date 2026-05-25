@@ -2,6 +2,26 @@ import type { PostgrestError } from "@supabase/supabase-js";
 
 import { err, ok, type Err, type Result } from "@/server/result";
 
+/** PostgREST / schema cache — table or relation not deployed on this Supabase project. */
+export function isMissingSchemaTableError(
+  error: PostgrestError | null,
+  tableName?: string
+): boolean {
+  if (!error) return false;
+  const msg = error.message.toLowerCase();
+  const mentionsTable =
+    !tableName ||
+    msg.includes(tableName.toLowerCase()) ||
+    msg.includes("schema cache");
+  return (
+    mentionsTable &&
+    (error.code === "PGRST205" ||
+      error.code === "42P01" ||
+      msg.includes("could not find the table") ||
+      msg.includes("does not exist"))
+  );
+}
+
 /** Maps Supabase PostgREST errors to stable `Result` failures. */
 export function fromPostgrestError(
   error: PostgrestError | null,

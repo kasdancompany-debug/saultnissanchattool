@@ -51,9 +51,13 @@ export function buildInboundClassificationUserPrompt(input: {
   conversationDepartment: string;
   recentTranscript: string;
   latestCustomerMessage: string;
+  widgetIntakeTopic?: string | null;
 }): string {
+  const topicLine = input.widgetIntakeTopic
+    ? `Widget topic selected at start: ${input.widgetIntakeTopic.replace(/_/g, " ")}.\n`
+    : "";
   return `Channel: ${input.channel}
-Current conversation department (may differ from your routing suggestion): ${input.conversationDepartment}
+${topicLine}Current conversation department (may differ from your routing suggestion): ${input.conversationDepartment}
 
 Recent conversation (oldest first, may be truncated):
 ---

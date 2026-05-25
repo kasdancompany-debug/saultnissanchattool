@@ -1,4 +1,5 @@
 import type { ConversationStatus } from "@/integrations/supabase/database.types";
+import { readPipelineFromMetadata } from "@/lib/conversation/pipeline-outcomes";
 import { readOpportunityFromMetadata } from "@/lib/opportunity/metadata";
 
 export type InboxLeadStatus = "new" | "working" | "appointment" | "sold" | "lost";
@@ -32,6 +33,11 @@ export function deriveInboxLeadStatus(input: {
 }): InboxLeadStatus {
   const meta = asRecord(input.metadata);
   const blob = JSON.stringify(meta);
+  const pipeline = readPipelineFromMetadata(meta);
+
+  if (pipeline.sold) return "sold";
+  if (pipeline.lost) return "lost";
+  if (pipeline.appointment) return "appointment";
 
   if (input.status === "spam") return "lost";
   if (input.status === "closed" || input.status === "resolved" || input.status === "archived") {

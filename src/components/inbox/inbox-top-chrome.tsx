@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { buildInboxHref, ownerUserIdForInboxTab } from "./inbox-params";
 import { filterTabLabel, inboxOwnershipViewHint } from "./inbox-labels";
-import type { InboxQueueCounts } from "./use-inbox-queue-counts";
+import type { InboxQueueCounts } from "@/lib/inbox/compute-queue-counts";
 import { useInboxQueueCounts } from "./use-inbox-queue-counts";
 
 function countForFilter(f: InboxFilter, c: InboxQueueCounts): number {
@@ -115,6 +115,7 @@ export function InboxTopChrome({
   sort,
   assigneeScopeUserId,
   selectedConversationId,
+  initialQueueCounts,
 }: {
   dealershipId: string;
   staffUserId: string;
@@ -123,6 +124,7 @@ export function InboxTopChrome({
   sort: InboxSort;
   assigneeScopeUserId: string | null;
   selectedConversationId: string | null;
+  initialQueueCounts?: InboxQueueCounts;
 }) {
   const canViewAll = canViewDealershipWideInbox(staffRole);
   const visibleFilters = allowedInboxFiltersForRole(staffRole);
@@ -133,7 +135,8 @@ export function InboxTopChrome({
     dealershipId,
     staffUserId,
     45_000,
-    canViewAll
+    canViewAll,
+    initialQueueCounts
   );
   const ownerForHref = assigneeScopeUserId;
   const filterHrefs = useMemo(

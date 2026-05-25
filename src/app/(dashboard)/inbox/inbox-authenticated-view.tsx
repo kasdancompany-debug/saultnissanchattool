@@ -16,7 +16,9 @@ import {
 import { resolveInboxAssigneeScopeForFilter } from "@/components/inbox/inbox-params";
 import type { InboxSort } from "@/lib/inbox/inbox-sort";
 import type { InboxFilter } from "@/server/data/inbox";
+import { EMPTY_INBOX_QUEUE_COUNTS } from "@/lib/inbox/compute-queue-counts";
 import { requireStaff } from "@/server/auth/staff";
+import { getInboxQueueCounts } from "@/server/data/inbox-queue-counts";
 import { staffCanEditDealershipSettings } from "@/server/settings/staff-privilege";
 
 export async function InboxAuthenticatedView({
@@ -43,6 +45,13 @@ export async function InboxAuthenticatedView({
   const widgetSlug = staff.dealership.slug?.trim() || "sault-nissan";
   const widgetHref = `/widget?slug=${encodeURIComponent(widgetSlug)}`;
 
+  const countsRes = await getInboxQueueCounts(
+    staff.dealership_id,
+    staff.id,
+    canViewDealershipWide
+  );
+  const initialQueueCounts = countsRes.ok ? countsRes.data : EMPTY_INBOX_QUEUE_COUNTS;
+
   return (
     <InboxRealtimeBridge
       dealershipId={staff.dealership_id}
@@ -56,6 +65,7 @@ export async function InboxAuthenticatedView({
         assigneeScopeUserId={assigneeScopeUserId}
         selectedConversationId={selectedConversationId}
         sort={sort}
+        initialQueueCounts={initialQueueCounts}
       >
         <Suspense fallback={<InboxOrphanSlotSkeleton />}>
           <InboxOrphanSlot

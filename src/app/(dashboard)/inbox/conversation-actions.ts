@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 
 import { requireStaff } from "@/server/auth/staff";
+import type { PipelineOutcomeKey } from "@/lib/conversation/pipeline-outcomes";
 import { updateConversationDepartment, updateConversationStatus } from "@/server/data/conversations";
+import {
+  clearConversationPipelineOutcome,
+  setConversationPipelineOutcome,
+} from "@/server/data/conversation-pipeline";
 import {
   claimConversation,
   reassignConversation,
@@ -139,10 +144,67 @@ export async function inboxConversationAction(
       }
       break;
     }
+    case "mark_pipeline_qualified":
+    case "mark_pipeline_appointment":
+    case "mark_pipeline_sold":
+    case "mark_pipeline_lost": {
+      const outcomeMap: Record<string, PipelineOutcomeKey> = {
+        mark_pipeline_qualified: "qualified",
+        mark_pipeline_appointment: "appointment",
+        mark_pipeline_sold: "sold",
+        mark_pipeline_lost: "lost",
+      };
+      const outcome = outcomeMap[intent];
+      const res = await setConversationPipelineOutcome({
+        dealershipId: staff.dealership_id,
+        conversationId,
+        actorUserId: staff.id,
+        outcome,
+      });
+      if (!res.ok) {
+        return { ok: false, error: res.error.message };
+      }
+      if (outcome === "sold" || outcome === "lost") {
+        const closed = await updateConversationStatus(
+          staff.dealership_id,
+          conversationId,
+          "closed",
+          staff.id,
+          { reason: `staff_mark_${outcome}` }
+        );
+        if (!closed.ok && closed.error.code !== "VALIDATION") {
+          return { ok: false, error: closed.error.message };
+        }
+      }
+      break;
+    }
+    case "clear_pipeline_qualified":
+    case "clear_pipeline_appointment":
+    case "clear_pipeline_sold":
+    case "clear_pipeline_lost": {
+      const clearMap: Record<string, PipelineOutcomeKey> = {
+        clear_pipeline_qualified: "qualified",
+        clear_pipeline_appointment: "appointment",
+        clear_pipeline_sold: "sold",
+        clear_pipeline_lost: "lost",
+      };
+      const outcome = clearMap[intent];
+      const res = await clearConversationPipelineOutcome({
+        dealershipId: staff.dealership_id,
+        conversationId,
+        actorUserId: staff.id,
+        outcome,
+      });
+      if (!res.ok) {
+        return { ok: false, error: res.error.message };
+      }
+      break;
+    }
     default:
       return { ok: false, error: "Unknown action." };
   }
 
   revalidatePath("/inbox", "page");
+  revalidatePath("/overview", "page");
   return { ok: true, error: null };
 }
