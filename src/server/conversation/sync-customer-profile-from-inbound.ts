@@ -44,10 +44,11 @@ function profileHintsFromAiInsights(metadata: unknown): ExtractedProfileHints {
   if (!ai) {
     return { name: null, email: null, phoneE164: null };
   }
+  const profile = ai.customer_profile;
   return {
-    name: ai.customer_profile.name?.trim() ?? null,
-    email: ai.customer_profile.email?.trim() ?? null,
-    phoneE164: normalizeStoredPhone(ai.customer_profile.phone_e164),
+    name: profile.name?.trim() ?? null,
+    email: profile.email?.trim() ?? null,
+    phoneE164: normalizeStoredPhone(profile.phone_e164),
   };
 }
 

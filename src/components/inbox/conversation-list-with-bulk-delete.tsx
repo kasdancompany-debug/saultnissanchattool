@@ -112,7 +112,6 @@ export function ConversationListWithBulkDelete({
                     filter={filter}
                     sort={sort}
                     assigneeScopeUserId={assigneeScopeUserId}
-                    selectedConversationId={selectedConversationId}
                     onDeleted={clearSelection}
                   />
                 </div>

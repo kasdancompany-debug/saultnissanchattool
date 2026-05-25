@@ -20,7 +20,6 @@ type Props = {
   filter: InboxFilter;
   sort: InboxSort;
   assigneeScopeUserId: string | null;
-  selectedConversationId: string | null;
   onDeleted?: () => void;
   size?: "sm" | "default";
   className?: string;
@@ -32,7 +31,6 @@ export function InboxDeleteForeverControl({
   filter,
   sort,
   assigneeScopeUserId,
-  selectedConversationId,
   onDeleted,
   size = "sm",
   className,
@@ -54,33 +52,17 @@ export function InboxDeleteForeverControl({
     }
     setConfirming(false);
     onDeleted?.();
-    const removedSelected =
-      selectedConversationId &&
-      conversationIds.includes(selectedConversationId);
     startTransition(() => {
-      if (removedSelected) {
-        router.push(
-          buildInboxHref(filter, {
-            ownerUserId: assigneeScopeUserId,
-            sort,
-            conversationId: null,
-          })
-        );
-      } else {
-        router.refresh();
-      }
+      router.push(
+        buildInboxHref(filter, {
+          ownerUserId: assigneeScopeUserId,
+          sort,
+          conversationId: null,
+        })
+      );
       markInboxClientRefreshed();
     });
-  }, [
-    state.ok,
-    onDeleted,
-    selectedConversationId,
-    conversationIds,
-    filter,
-    sort,
-    assigneeScopeUserId,
-    router,
-  ]);
+  }, [state.ok, onDeleted, filter, sort, assigneeScopeUserId, router]);
 
   if (confirming) {
     return (

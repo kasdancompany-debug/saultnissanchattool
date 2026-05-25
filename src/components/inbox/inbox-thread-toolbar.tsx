@@ -203,7 +203,6 @@ export function InboxThreadToolbar({
               filter={inboxFilter}
               sort={inboxSort}
               assigneeScopeUserId={inboxOwnerUserId}
-              selectedConversationId={conversationId}
               label="Delete forever"
             />
           ) : null}

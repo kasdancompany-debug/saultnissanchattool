@@ -29,7 +29,7 @@ function asRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
-function isAiInsights(value: unknown): value is ConversationAiInsights {
+function isAiInsightsShape(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const o = value as Record<string, unknown>;
   return (
@@ -40,12 +40,56 @@ function isAiInsights(value: unknown): value is ConversationAiInsights {
   );
 }
 
+function normalizeCustomerProfile(
+  value: unknown
+): ConversationAiInsights["customer_profile"] {
+  const p = asRecord(value);
+  return {
+    name: typeof p.name === "string" ? p.name : null,
+    email: typeof p.email === "string" ? p.email : null,
+    phone_e164: typeof p.phone_e164 === "string" ? p.phone_e164 : null,
+  };
+}
+
+function normalizeAiInsights(raw: Record<string, unknown>): ConversationAiInsights {
+  const missing = Array.isArray(raw.missing_profile_fields)
+    ? raw.missing_profile_fields.filter(
+        (field): field is string => typeof field === "string"
+      )
+    : [];
+
+  return {
+    intent: String(raw.intent),
+    department: raw.department as StaffDepartment,
+    urgency: typeof raw.urgency === "string" ? raw.urgency : "normal",
+    sentiment: typeof raw.sentiment === "string" ? raw.sentiment : "neutral",
+    confidence:
+      typeof raw.confidence === "number" && Number.isFinite(raw.confidence)
+        ? raw.confidence
+        : 0,
+    intent_level: raw.intent_level as OpportunityScoreBand,
+    opportunity_score:
+      typeof raw.opportunity_score === "number" &&
+      Number.isFinite(raw.opportunity_score)
+        ? raw.opportunity_score
+        : 0,
+    recommended_action:
+      typeof raw.recommended_action === "string"
+        ? raw.recommended_action
+        : "",
+    customer_profile: normalizeCustomerProfile(raw.customer_profile),
+    missing_profile_fields: missing,
+    updated_at:
+      typeof raw.updated_at === "string" ? raw.updated_at : new Date().toISOString(),
+  };
+}
+
 export function readAiInsightsFromMetadata(
   metadata: unknown
 ): ConversationAiInsights | null {
   const raw = asRecord(metadata).ai_insights;
-  if (!isAiInsights(raw)) return null;
-  return raw;
+  if (!isAiInsightsShape(raw)) return null;
+  return normalizeAiInsights(raw as Record<string, unknown>);
 }
 
 export function buildAiInsightsSnapshot(input: {

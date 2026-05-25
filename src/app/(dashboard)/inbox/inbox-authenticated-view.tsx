@@ -100,6 +100,9 @@ export async function InboxAuthenticatedView({
               <InboxThreadLoader
                 dealershipId={staff.dealership_id}
                 conversationId={selectedConversationId}
+                filter={effectiveFilter}
+                sort={sort}
+                assigneeScopeUserId={assigneeScopeUserId}
                 currentStaffUserId={staff.id}
                 canManageAssignments={canManageAssignments}
                 canDeleteForever

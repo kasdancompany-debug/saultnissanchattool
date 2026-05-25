@@ -1,8 +1,13 @@
+import { redirect } from "next/navigation";
+
+import type { InboxSort } from "@/lib/inbox/inbox-sort";
+import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 import {
   loadInboxStaffDirectory,
   loadInboxThread,
 } from "@/server/inbox/inbox-loaders";
 
+import { buildInboxHref } from "./inbox-params";
 import { InboxAiCopilotShell } from "./inbox-ai-copilot-drawer";
 import { InboxThreadPanel } from "./inbox-thread-panel";
 import { InboxThreadError } from "./inbox-thread-error";
@@ -10,12 +15,18 @@ import { InboxThreadError } from "./inbox-thread-error";
 export async function InboxThreadLoader({
   dealershipId,
   conversationId,
+  filter,
+  sort,
+  assigneeScopeUserId,
   currentStaffUserId,
   canManageAssignments,
   canDeleteForever,
 }: {
   dealershipId: string;
   conversationId: string;
+  filter: InboxFilter;
+  sort: InboxSort;
+  assigneeScopeUserId: string | null;
   currentStaffUserId: string;
   canManageAssignments: boolean;
   canDeleteForever: boolean;
@@ -26,6 +37,15 @@ export async function InboxThreadLoader({
   ]);
 
   if (!threadRes.ok) {
+    if (threadRes.error.code === "NOT_FOUND") {
+      redirect(
+        buildInboxHref(filter, {
+          ownerUserId: assigneeScopeUserId,
+          sort,
+          conversationId: null,
+        })
+      );
+    }
     return <InboxThreadError message={threadRes.error.message} />;
   }
 
