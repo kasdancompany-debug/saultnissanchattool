@@ -21,7 +21,7 @@ import { cardElevationClassName } from "@/lib/ui/panel";
 import { cn } from "@/lib/utils";
 
 import { buildInboxHref } from "./inbox-params";
-import { ConversationListRow } from "./conversation-list-row";
+import { ConversationListWithBulkDelete } from "./conversation-list-with-bulk-delete";
 import { InboxSortSelect } from "./inbox-sort-select";
 
 type OnboardingIcon = ComponentType<{ className?: string }>;
@@ -169,8 +169,8 @@ function emptyOnboarding(filter: InboxFilter, widgetHref: string): EmptyOnboardi
           "Once your team resolves or archives threads, they show up here for audits, callbacks, and handoffs — so nothing disappears into a personal inbox.",
         steps: [
           "Go to All Open to work active customer conversations.",
-          "When a thread is finished, use Delete conversation in the thread view — it will land here automatically.",
-          "Need a sample? Send a test from the widget, reply once, then delete the conversation to see the flow.",
+          "When a thread is finished, close it from the thread view — it will land here automatically.",
+          "Managers and admins can select conversations here and delete them forever when history should be removed.",
         ],
         primary: {
           href: buildInboxHref("all_open"),
@@ -200,6 +200,7 @@ export function ConversationListPanel({
   currentStaffUserId,
   widgetHref,
   emptyHint,
+  canDeleteForever,
 }: {
   items: InboxConversationListItem[];
   filter: InboxFilter;
@@ -209,6 +210,7 @@ export function ConversationListPanel({
   currentStaffUserId: string;
   widgetHref: string;
   emptyHint: string;
+  canDeleteForever: boolean;
 }) {
   const isEmpty = items.length === 0;
   const onboarding = emptyOnboarding(filter, widgetHref);
@@ -327,22 +329,15 @@ export function ConversationListPanel({
           </div>
         </div>
       ) : (
-        <ScrollArea className="min-h-0 flex-1">
-          <ul className="flex flex-col gap-1.5 p-2 pb-5 sm:p-2.5">
-            {items.map((item) => (
-              <li key={item.id}>
-                <ConversationListRow
-                  item={item}
-                  filter={filter}
-                  sort={sort}
-                  assigneeScopeUserId={assigneeScopeUserId}
-                  isSelected={item.id === selectedConversationId}
-                  currentStaffUserId={currentStaffUserId}
-                />
-              </li>
-            ))}
-          </ul>
-        </ScrollArea>
+        <ConversationListWithBulkDelete
+          items={items}
+          filter={filter}
+          sort={sort}
+          assigneeScopeUserId={assigneeScopeUserId}
+          selectedConversationId={selectedConversationId}
+          currentStaffUserId={currentStaffUserId}
+          canDeleteForever={canDeleteForever}
+        />
       )}
     </aside>
   );

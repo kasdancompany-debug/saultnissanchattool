@@ -16,8 +16,12 @@ import { buildAiCopilotView } from "@/server/inbox/build-ai-copilot-view";
 import type { AiAssistPanelView } from "@/types/ai-assist-panel";
 import type { AiCopilotView } from "@/types/ai-copilot";
 import { resolveConversationHandlingMode } from "@/lib/conversation/control-metadata";
+import { readAiInsightsFromMetadata } from "@/lib/conversation/ai-insights-metadata";
 import { isPlaceholderCustomerName } from "@/lib/conversation/extract-profile-hints";
+import { resolveEffectiveCustomerProfile } from "@/lib/conversation/resolve-effective-customer-profile";
 import { isAfterHoursWebChatIntake } from "@/lib/conversation/widget-metadata";
+import { syncCustomerProfileFromConversationThread } from "@/server/conversation/sync-customer-profile-from-inbound";
+import { getCustomerById } from "@/server/data/customers";
 import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 import {
   applyInboxSort,
@@ -71,6 +75,12 @@ export type InboxThreadData = {
   };
   messages: InboxMessageView[];
   customer_display_name: string;
+  /** Profile fields for the center form — matches Insights (chat + CRM + AI). */
+  customer_profile: {
+    displayName: string;
+    email: string | null;
+    phoneE164: string | null;
+  };
   assignee: {
     id: string;
     display_name: string;
@@ -405,15 +415,52 @@ export async function getInboxThread(
     return msgsRes;
   }
 
+  await syncCustomerProfileFromConversationThread(
+    dealershipId,
+    conversationId,
+    supabase
+  );
+
+  let syncedCustomers = customers;
+  const customerId = detail.customer_id?.trim();
+  if (customerId) {
+    const refreshed = await getCustomerById(dealershipId, customerId, supabase);
+    if (refreshed.ok) {
+      syncedCustomers = {
+        display_name: refreshed.data.display_name,
+        email: refreshed.data.email,
+        phone_e164: refreshed.data.phone_e164,
+      };
+    }
+  }
+
   const latest_ai_assist = aiRes.ok ? aiRes.data : null;
   const ai_assist_panel = buildAiAssistPanelView(latest_ai_assist);
 
-  const enriched = chatUiMessagesToInboxViews(msgsRes.data, customer_display_name);
+  const customerBodies = msgsRes.data
+    .filter((m) => m.sender_type === "customer")
+    .map((m) => (m.body ?? "").trim())
+    .filter(Boolean);
+
+  const aiInsights = readAiInsightsFromMetadata(convRow.metadata);
+  const effectiveProfile = resolveEffectiveCustomerProfile({
+    displayName: getCustomerDisplayName(syncedCustomers, convRow.title),
+    email: syncedCustomers?.email ?? null,
+    phoneE164: syncedCustomers?.phone_e164 ?? null,
+    customerMessageBodies: customerBodies,
+    aiInsightsProfile: aiInsights?.customer_profile ?? null,
+  });
+
+  const customer_display_name_resolved = effectiveProfile.displayName;
+  const enriched = chatUiMessagesToInboxViews(
+    msgsRes.data,
+    customer_display_name_resolved
+  );
 
   const ai_copilot = buildAiCopilotView({
-    customerDisplayName: customer_display_name,
-    customerEmail: customers?.email ?? null,
-    customerPhoneE164: customers?.phone_e164 ?? null,
+    customerDisplayName: customer_display_name_resolved,
+    customerEmail: effectiveProfile.email,
+    customerPhoneE164: effectiveProfile.phoneE164,
     messages: enriched,
     conversationMetadata: convRow.metadata,
     department: convRow.department,
@@ -425,10 +472,15 @@ export async function getInboxThread(
   return ok({
     conversation: {
       ...convRow,
-      customers,
+      customers: syncedCustomers,
     },
     messages: enriched,
-    customer_display_name,
+    customer_display_name: customer_display_name_resolved,
+    customer_profile: {
+      displayName: effectiveProfile.displayName,
+      email: effectiveProfile.email,
+      phoneE164: effectiveProfile.phoneE164,
+    },
     assignee,
     workflow_caption: buildWorkflowCaption(convRow),
     ai_assist_panel,

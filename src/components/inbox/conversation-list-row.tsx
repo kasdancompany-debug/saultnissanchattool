@@ -44,6 +44,7 @@ export function ConversationListRow({
   sort,
   assigneeScopeUserId,
   isSelected,
+  bulkSelect,
 }: {
   item: InboxConversationListItem;
   filter: InboxFilter;
@@ -51,6 +52,10 @@ export function ConversationListRow({
   assigneeScopeUserId: string | null;
   isSelected: boolean;
   currentStaffUserId: string;
+  bulkSelect?: {
+    checked: boolean;
+    onCheckedChange: (checked: boolean) => void;
+  };
 }) {
   const name = getCustomerDisplayName(item.customers, item.title);
   const opportunity = item.opportunity;
@@ -59,20 +64,40 @@ export function ConversationListRow({
   const isHighPriority = band === "high";
 
   return (
-    <Link
-      href={buildInboxConversationHref(filter, item.id, assigneeScopeUserId, sort)}
-      scroll={false}
+    <div
       className={cn(
-        "group relative block overflow-hidden rounded-lg border transition-[transform,box-shadow,border-color] duration-200 ease-out",
-        "focus-visible:ring-2 focus-visible:ring-ring/55 focus-visible:outline-none motion-reduce:transition-none",
+        "group relative flex overflow-hidden rounded-lg border transition-[transform,box-shadow,border-color] duration-200 ease-out",
         priorityShell[band],
         isHighPriority && "motion-safe:hover:-translate-y-px",
         !isHighPriority && "hover:shadow-md",
         isSelected &&
           "ring-2 ring-primary/30 border-primary/40 shadow-[inset_3px_0_0_0_var(--primary)]"
       )}
-      aria-current={isSelected ? "true" : undefined}
     >
+      {bulkSelect ? (
+        <div
+          className="flex shrink-0 items-center py-2.5 pl-2.5"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            className="border-input text-primary focus-visible:ring-ring size-3.5 rounded border shadow-sm focus-visible:ring-2 focus-visible:outline-none"
+            checked={bulkSelect.checked}
+            onChange={(e) => bulkSelect.onCheckedChange(e.target.checked)}
+            aria-label={`Select conversation with ${name}`}
+          />
+        </div>
+      ) : null}
+      <Link
+        href={buildInboxConversationHref(filter, item.id, assigneeScopeUserId, sort)}
+        scroll={false}
+        className={cn(
+          "relative block min-w-0 flex-1 overflow-hidden",
+          "focus-visible:ring-2 focus-visible:ring-ring/55 focus-visible:outline-none motion-reduce:transition-none"
+        )}
+        aria-current={isSelected ? "true" : undefined}
+      >
       <div
         className={cn(
           "absolute inset-y-0 left-0 w-[3px]",
@@ -161,6 +186,7 @@ export function ConversationListRow({
           </span>
         </div>
       </div>
-    </Link>
+      </Link>
+    </div>
   );
 }

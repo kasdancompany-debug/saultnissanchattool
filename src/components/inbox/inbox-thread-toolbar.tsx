@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useActionState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { markInboxClientRefreshed } from "@/lib/inbox-client-refresh-coord";
 
@@ -31,6 +31,12 @@ import {
   cardPanelHeaderClassName,
 } from "@/lib/ui/panel";
 import { cn } from "@/lib/utils";
+import {
+  parseInboxFilter,
+  parseInboxOwnerUserId,
+  parseInboxSort,
+} from "@/components/inbox/inbox-params";
+import { InboxDeleteForeverControl } from "@/components/inbox/inbox-delete-forever-control";
 
 export type StaffPickerOption = {
   id: string;
@@ -61,6 +67,10 @@ export function InboxThreadToolbar({
   conversationMetadata: unknown;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inboxFilter = parseInboxFilter(searchParams.get("filter") ?? undefined);
+  const inboxSort = parseInboxSort(searchParams.get("sort") ?? undefined);
+  const inboxOwnerUserId = parseInboxOwnerUserId(searchParams.get("owner"));
   const [state, formAction, isPending] = useActionState<
     InboxConversationActionState,
     FormData
@@ -175,9 +185,21 @@ export function InboxThreadToolbar({
       ) : null}
 
       {terminal ? (
-        <p className="text-muted-foreground text-sm">
-          This conversation is read-only. Ownership and status cannot be changed here.
-        </p>
+        <div className="flex flex-col gap-3">
+          <p className="text-muted-foreground text-sm">
+            This conversation is read-only. Ownership and status cannot be changed here.
+          </p>
+          {canManageAssignments ? (
+            <InboxDeleteForeverControl
+              conversationIds={[conversationId]}
+              filter={inboxFilter}
+              sort={inboxSort}
+              assigneeScopeUserId={inboxOwnerUserId}
+              selectedConversationId={conversationId}
+              label="Delete forever"
+            />
+          ) : null}
+        </div>
       ) : (
         <form action={formAction} className="flex flex-col gap-4">
           <input type="hidden" name="conversationId" value={conversationId} />
@@ -461,13 +483,25 @@ export function InboxThreadToolbar({
                   name="intent"
                   value="close"
                   size="sm"
-                  variant="destructive"
+                  variant="secondary"
                   title="Removes this thread from your active inbox (marked closed). Staff cannot send new replies."
                 >
-                  Delete conversation
+                  Close conversation
                 </SubmitButton>
               ) : null}
             </div>
+            {canManageAssignments ? (
+              <div className="mt-2">
+                <InboxDeleteForeverControl
+                  conversationIds={[conversationId]}
+                  filter={inboxFilter}
+                  sort={inboxSort}
+                  assigneeScopeUserId={inboxOwnerUserId}
+                  selectedConversationId={conversationId}
+                  label="Delete forever"
+                />
+              </div>
+            ) : null}
           </div>
         </form>
       )}

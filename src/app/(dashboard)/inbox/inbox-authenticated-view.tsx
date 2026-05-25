@@ -90,6 +90,7 @@ export async function InboxAuthenticatedView({
               assigneeScopeUserId={assigneeScopeUserId}
               selectedConversationId={selectedConversationId}
               widgetHref={widgetHref}
+              canDeleteForever={canManageAssignments}
             />
           </Suspense>
 

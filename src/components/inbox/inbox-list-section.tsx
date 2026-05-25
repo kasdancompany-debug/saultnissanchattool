@@ -15,6 +15,7 @@ export async function InboxListSection({
   assigneeScopeUserId,
   selectedConversationId,
   widgetHref,
+  canDeleteForever,
 }: {
   dealershipId: string;
   filter: InboxFilter;
@@ -24,6 +25,7 @@ export async function InboxListSection({
   assigneeScopeUserId: string | null;
   selectedConversationId: string | null;
   widgetHref: string;
+  canDeleteForever: boolean;
 }) {
   const listRes = await loadInboxConversationList(
     dealershipId,
@@ -55,6 +57,7 @@ export async function InboxListSection({
       currentStaffUserId={staffUserId}
       widgetHref={widgetHref}
       emptyHint={inboxListSubtitle(filter)}
+      canDeleteForever={canDeleteForever}
     />
   );
 }

@@ -47,7 +47,7 @@ export async function InboxThreadLoader({
     >
       <InboxThreadPanel
         conversationId={thread.conversation.id}
-        customerDisplayName={thread.customer_display_name}
+        customerDisplayName={thread.customer_profile.displayName}
         conversationTitle={thread.conversation.title}
         channel={thread.conversation.channel}
         department={thread.conversation.department}
@@ -60,8 +60,8 @@ export async function InboxThreadLoader({
         staffDirectory={staffDirectory}
         conversationMetadata={thread.conversation.metadata}
         aiEnabled={thread.conversation.ai_enabled}
-        customerEmail={thread.conversation.customers?.email ?? null}
-        customerPhoneE164={thread.conversation.customers?.phone_e164 ?? null}
+        customerEmail={thread.customer_profile.email}
+        customerPhoneE164={thread.customer_profile.phoneE164}
       />
     </InboxAiCopilotShell>
   );

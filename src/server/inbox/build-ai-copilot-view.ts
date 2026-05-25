@@ -8,11 +8,8 @@ import { computeOpportunityScore } from "@/lib/opportunity/compute-opportunity";
 import { readAiInsightsFromMetadata } from "@/lib/conversation/ai-insights-metadata";
 import { readOpportunityFromMetadata } from "@/lib/opportunity/metadata";
 import { opportunityBandLabel } from "@/lib/opportunity/score-band";
-import {
-  aggregateProfileHintsFromTexts,
-  isPlaceholderCustomerName,
-  profileFieldsStillMissing,
-} from "@/lib/conversation/extract-profile-hints";
+import { profileFieldsStillMissing } from "@/lib/conversation/extract-profile-hints";
+import { resolveEffectiveCustomerProfile } from "@/lib/conversation/resolve-effective-customer-profile";
 
 const DEPARTMENT_LABEL: Record<StaffDepartment, string> = {
   sales: "Sales",
@@ -227,36 +224,21 @@ export function buildAiCopilotView(input: {
   const intentSummary =
     aiInsights?.intent ?? input.assist?.intent ?? opportunity.intent_summary;
 
-  const extractedFromChat = aggregateProfileHintsFromTexts(
-    input.messages
+  const effective = resolveEffectiveCustomerProfile({
+    displayName: input.customerDisplayName,
+    email: input.customerEmail,
+    phoneE164: input.customerPhoneE164,
+    customerMessageBodies: input.messages
       .filter((m) => m.sender_type === "customer")
-      .map((m) => m.body ?? "")
-  );
-
-  const effectiveDisplayName =
-    extractedFromChat.name?.trim() ||
-    (!isPlaceholderCustomerName(input.customerDisplayName)
-      ? input.customerDisplayName.trim()
-      : null) ||
-    input.customerDisplayName;
-
-  const effectivePhoneE164 =
-    extractedFromChat.phoneE164?.trim() ||
-    input.customerPhoneE164?.trim() ||
-    aiInsights?.customer_profile.phone_e164?.trim() ||
-    null;
-
-  const effectiveEmail =
-    extractedFromChat.email?.trim() ||
-    input.customerEmail?.trim() ||
-    aiInsights?.customer_profile.email?.trim() ||
-    null;
+      .map((m) => m.body ?? ""),
+    aiInsightsProfile: aiInsights?.customer_profile ?? null,
+  });
 
   const missingFields = profileFieldsStillMissing({
-    displayName: effectiveDisplayName,
-    email: effectiveEmail,
-    phoneE164: effectivePhoneE164,
-    extracted: extractedFromChat,
+    displayName: effective.displayName,
+    email: effective.email,
+    phoneE164: effective.phoneE164,
+    extracted: effective.extractedFromChat,
   });
 
   const profileNotes = [
@@ -290,9 +272,9 @@ export function buildAiCopilotView(input: {
     nextActions: buildNextActions(input.assist, customerText, input.hasAssignee),
     suggestedResponses: buildSuggestedResponses(input.assist, customerText),
     customerProfile: {
-      displayName: effectiveDisplayName,
-      email: effectiveEmail,
-      phoneE164: effectivePhoneE164,
+      displayName: effective.displayName,
+      email: effective.email,
+      phoneE164: effective.phoneE164,
       notes: profileNotes || null,
       missingFields,
     },
