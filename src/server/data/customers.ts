@@ -1,4 +1,11 @@
+import type { PostgrestError } from "@supabase/supabase-js";
+
 import type { Database, Json, Tables } from "@/integrations/supabase/database.types";
+import {
+  normalizeE164,
+  phoneLookupVariants,
+  phonesEquivalent,
+} from "@/lib/phone/e164";
 import { ok, err, type Result } from "@/server/result";
 import { resolveDb } from "@/server/data/internal";
 import type { TypedSupabaseClient } from "@/server/db/server-client";
@@ -149,6 +156,121 @@ export async function getCustomerById(
   return resultFromNullable(res.data, "Customer not found");
 }
 
+function isUniqueViolation(error: PostgrestError | null): boolean {
+  return error?.code === "23505";
+}
+
+async function findCustomerByPhoneVariants(
+  dealershipId: string,
+  phone: string,
+  supabase: TypedSupabaseClient,
+  excludeCustomerId?: string
+): Promise<CustomerRow | null> {
+  for (const variant of phoneLookupVariants(phone)) {
+    const res = await supabase
+      .from("customers")
+      .select("*")
+      .eq("dealership_id", dealershipId)
+      .eq("phone_e164", variant)
+      .maybeSingle();
+    if (res.error) {
+      continue;
+    }
+    if (res.data && res.data.id !== excludeCustomerId) {
+      return res.data;
+    }
+  }
+  return null;
+}
+
+async function findCustomerByEmail(
+  dealershipId: string,
+  email: string,
+  supabase: TypedSupabaseClient,
+  excludeCustomerId?: string
+): Promise<CustomerRow | null> {
+  const res = await supabase
+    .from("customers")
+    .select("*")
+    .eq("dealership_id", dealershipId)
+    .eq("email", email)
+    .maybeSingle();
+  if (res.error || !res.data || res.data.id === excludeCustomerId) {
+    return null;
+  }
+  return res.data;
+}
+
+/**
+ * When two CRM rows share a phone (common after anonymous web chat + later identification),
+ * keep the existing phone row and move conversations off the duplicate.
+ */
+async function mergeDuplicateCustomerRecords(
+  input: {
+    dealershipId: string;
+    fromCustomerId: string;
+    toCustomerId: string;
+    displayName?: string | null;
+    email?: string | null;
+  },
+  supabase: TypedSupabaseClient
+): Promise<Result<CustomerRow>> {
+  const profilePatch: Database["public"]["Tables"]["customers"]["Update"] = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (input.displayName !== undefined) {
+    const trimmed = input.displayName?.trim() ?? "";
+    profilePatch.display_name = trimmed.length > 0 ? trimmed : null;
+  }
+  if (input.email !== undefined) {
+    const email = input.email?.trim().toLowerCase() ?? "";
+    profilePatch.email = email.length > 0 ? email : null;
+  }
+
+  if (
+    profilePatch.display_name !== undefined ||
+    profilePatch.email !== undefined
+  ) {
+    const updated = await supabase
+      .from("customers")
+      .update(profilePatch)
+      .eq("dealership_id", input.dealershipId)
+      .eq("id", input.toCustomerId)
+      .select("*")
+      .maybeSingle();
+    if (updated.error) {
+      return fromPostgrestError(updated.error);
+    }
+  }
+
+  const relink = await supabase
+    .from("conversations")
+    .update({
+      customer_id: input.toCustomerId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("dealership_id", input.dealershipId)
+    .eq("customer_id", input.fromCustomerId);
+
+  if (relink.error) {
+    return fromPostgrestError(relink.error);
+  }
+
+  await supabase
+    .from("customers")
+    .delete()
+    .eq("dealership_id", input.dealershipId)
+    .eq("id", input.fromCustomerId);
+
+  const canonical = await getCustomerById(
+    input.dealershipId,
+    input.toCustomerId,
+    supabase
+  );
+  return canonical;
+}
+
 export async function updateCustomerProfile(
   input: {
     dealershipId: string;
@@ -166,6 +288,11 @@ export async function updateCustomerProfile(
   }
 
   const supabase = await resolveDb(db);
+  const current = await getCustomerById(dealershipId, customerId, supabase);
+  if (!current.ok) {
+    return current;
+  }
+
   const patch: Database["public"]["Tables"]["customers"]["Update"] = {};
 
   if (input.displayName !== undefined) {
@@ -176,9 +303,62 @@ export async function updateCustomerProfile(
     const email = input.email?.trim().toLowerCase() ?? "";
     patch.email = email.length > 0 ? email : null;
   }
+
+  let normalizedPhone: string | null | undefined;
   if (input.phoneE164 !== undefined) {
     const phone = input.phoneE164?.trim() ?? "";
-    patch.phone_e164 = phone.length > 0 ? phone : null;
+    normalizedPhone = phone.length > 0 ? normalizeE164(phone) : null;
+    patch.phone_e164 = normalizedPhone;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return ok(current.data);
+  }
+
+  const phoneChanging =
+    normalizedPhone !== undefined &&
+    !phonesEquivalent(normalizedPhone, current.data.phone_e164);
+
+  if (phoneChanging && normalizedPhone) {
+    const existingPhone = await findCustomerByPhoneVariants(
+      dealershipId,
+      normalizedPhone,
+      supabase,
+      customerId
+    );
+    if (existingPhone) {
+      return mergeDuplicateCustomerRecords(
+        {
+          dealershipId,
+          fromCustomerId: customerId,
+          toCustomerId: existingPhone.id,
+          displayName: input.displayName,
+          email: input.email,
+        },
+        supabase
+      );
+    }
+  }
+
+  if (patch.email && patch.email !== current.data.email) {
+    const existingEmail = await findCustomerByEmail(
+      dealershipId,
+      patch.email,
+      supabase,
+      customerId
+    );
+    if (existingEmail) {
+      return mergeDuplicateCustomerRecords(
+        {
+          dealershipId,
+          fromCustomerId: customerId,
+          toCustomerId: existingEmail.id,
+          displayName: input.displayName,
+          email: input.email,
+        },
+        supabase
+      );
+    }
   }
 
   patch.updated_at = new Date().toISOString();
@@ -190,6 +370,53 @@ export async function updateCustomerProfile(
     .eq("id", customerId)
     .select("*")
     .maybeSingle();
+
+  if (res.error && isUniqueViolation(res.error)) {
+    if (normalizedPhone) {
+      const existingPhone = await findCustomerByPhoneVariants(
+        dealershipId,
+        normalizedPhone,
+        supabase,
+        customerId
+      );
+      if (existingPhone) {
+        return mergeDuplicateCustomerRecords(
+          {
+            dealershipId,
+            fromCustomerId: customerId,
+            toCustomerId: existingPhone.id,
+            displayName: input.displayName,
+            email: input.email,
+          },
+          supabase
+        );
+      }
+    }
+    if (patch.email) {
+      const existingEmail = await findCustomerByEmail(
+        dealershipId,
+        patch.email,
+        supabase,
+        customerId
+      );
+      if (existingEmail) {
+        return mergeDuplicateCustomerRecords(
+          {
+            dealershipId,
+            fromCustomerId: customerId,
+            toCustomerId: existingEmail.id,
+            displayName: input.displayName,
+            email: input.email,
+          },
+          supabase
+        );
+      }
+    }
+    return err(
+      "CONFLICT",
+      "This phone or email is already linked to another customer profile."
+    );
+  }
 
   if (res.error) {
     return fromPostgrestError(res.error);

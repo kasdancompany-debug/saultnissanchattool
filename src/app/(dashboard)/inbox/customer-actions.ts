@@ -54,7 +54,22 @@ export async function updateInboxCustomerProfileAction(
   });
 
   if (!updated.ok) {
-    return { ok: false, error: updated.error.message };
+    const msg = updated.error.message;
+    if (msg.includes("customers_dealership_phone")) {
+      return {
+        ok: false,
+        error:
+          "That phone is already on another profile in your CRM. Try saving again — the app will merge duplicate records automatically.",
+      };
+    }
+    if (msg.includes("customers_dealership_email")) {
+      return {
+        ok: false,
+        error:
+          "That email is already on another customer profile. Use a different email or open the other thread.",
+      };
+    }
+    return { ok: false, error: msg };
   }
 
   revalidatePath("/inbox", "page");
