@@ -8,7 +8,7 @@ import { Activity, Radio, UserX, Users } from "lucide-react";
 import type { StaffRole } from "@/integrations/supabase/database.types";
 import { allowedInboxFiltersForRole, canViewDealershipWideInbox } from "@/lib/inbox/filter-access";
 import type { InboxSort } from "@/lib/inbox/inbox-sort";
-import type { InboxFilter } from "@/server/data/inbox";
+import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 import { cn } from "@/lib/utils";
 
 import { Badge } from "@/components/ui/badge";

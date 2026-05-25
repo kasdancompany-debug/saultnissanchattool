@@ -25,7 +25,7 @@ import {
 } from "@/app/(dashboard)/inbox/action-states";
 
 import { STAFF_MESSAGE_MAX_CHARS } from "@/lib/staff-message-limits";
-import type { InboxMessageView } from "@/server/data/inbox";
+import type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
 import type { InboxChannelSurfaceId } from "@/lib/conversation/inbox-channel-surface";
 import { inboxChannelReplyFootnote } from "@/lib/conversation/inbox-channel-ux";
 

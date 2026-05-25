@@ -1,4 +1,4 @@
-import type { InboxConversationListItem } from "@/server/data/inbox";
+import type { InboxConversationListItem } from "@/lib/inbox/inbox-list-item";
 
 export const INBOX_SORT_OPTIONS = [
   "highest_score",
@@ -36,6 +36,11 @@ export function inboxSortLabel(sort: InboxSort): string {
   }
 }
 
+function opportunityScore(item: InboxConversationListItem): number {
+  const s = item.opportunity?.score;
+  return typeof s === "number" && Number.isFinite(s) ? s : 0;
+}
+
 function activityMs(item: InboxConversationListItem): number {
   const iso =
     item.last_message_at ??
@@ -54,7 +59,7 @@ export function applyInboxSort(
   switch (sort) {
     case "highest_score":
       copy.sort((a, b) => {
-        const ds = b.opportunity.score - a.opportunity.score;
+        const ds = opportunityScore(b) - opportunityScore(a);
         if (ds !== 0) return ds;
         return activityMs(b) - activityMs(a);
       });
@@ -67,7 +72,7 @@ export function applyInboxSort(
         const au = a.assignee == null ? 1 : 0;
         const bu = b.assignee == null ? 1 : 0;
         if (bu !== au) return bu - au;
-        const ds = b.opportunity.score - a.opportunity.score;
+        const ds = opportunityScore(b) - opportunityScore(a);
         if (ds !== 0) return ds;
         return activityMs(b) - activityMs(a);
       });
@@ -84,7 +89,7 @@ export function applyInboxSort(
       copy.sort((a, b) => {
         const dd = a.department.localeCompare(b.department);
         if (dd !== 0) return dd;
-        const ds = b.opportunity.score - a.opportunity.score;
+        const ds = opportunityScore(b) - opportunityScore(a);
         if (ds !== 0) return ds;
         return activityMs(b) - activityMs(a);
       });

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { StaffRole } from "@/integrations/supabase/database.types";
 import type { InboxSort } from "@/lib/inbox/inbox-sort";
 import type { InboxQueueCounts } from "@/lib/inbox/compute-queue-counts";
-import type { InboxFilter } from "@/server/data/inbox";
+import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 
 import { InboxTopChrome } from "./inbox-top-chrome";
 import { filterTabLabel } from "./inbox-labels";

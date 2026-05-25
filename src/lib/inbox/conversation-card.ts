@@ -67,11 +67,12 @@ export function sentimentLabel(sentiment: Sentiment): string {
 export function buildInboxCardContext(input: InboxCardBuildInput): InboxConversationCardContext {
   const isUnassigned = input.assignee == null;
   const ownerIsCurrentStaff = input.assignee?.id === input.currentStaffUserId;
+  const assigneeName = input.assignee?.display_name?.trim() ?? "";
   const ownerLabel = isUnassigned
     ? "Unassigned"
     : ownerIsCurrentStaff
       ? "You"
-      : input.assignee!.display_name.split(" ")[0] ?? "Staff";
+      : assigneeName.split(" ")[0] || "Staff";
 
   const awaitingReply =
     input.status === "waiting_for_human" || input.lastMessageSender === "customer";

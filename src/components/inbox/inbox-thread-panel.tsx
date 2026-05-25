@@ -3,7 +3,7 @@ import type {
   ConversationStatus,
   StaffDepartment,
 } from "@/integrations/supabase/database.types";
-import type { InboxMessageView } from "@/server/data/inbox";
+import type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
 import { isAfterHoursWebChatIntake } from "@/lib/conversation/widget-metadata";
 import { isSentimentEscalationActive } from "@/lib/conversation/sentiment-escalation-metadata";
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
-import type { InboxFilter } from "@/server/data/inbox";
+import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 
 import { buildInboxHref } from "./inbox-params";
 import { filterTabLabel } from "./inbox-labels";

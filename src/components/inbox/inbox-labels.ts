@@ -3,7 +3,7 @@ import type {
   ConversationStatus,
   StaffDepartment,
 } from "@/integrations/supabase/database.types";
-import type { InboxFilter } from "@/server/data/inbox";
+import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 
 const CHANNEL: Record<ConversationChannel, string> = {
   sms: "SMS",

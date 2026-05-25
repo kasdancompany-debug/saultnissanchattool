@@ -1,14 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
-import {
-  buildInboxHref,
-  parseInboxFilter,
-  parseInboxOwnerUserId,
-} from "@/components/inbox/inbox-params";
-import { parseInboxSort } from "@/lib/inbox/inbox-sort";
 import { createSupabaseAdminClient, hasSupabaseServiceRoleKey } from "@/integrations/supabase/admin";
 import { createSupabaseServerClient } from "@/integrations/supabase/server";
 import { requireStaff } from "@/server/auth/staff";
@@ -41,25 +34,6 @@ function parseConversationIds(raw: FormDataEntryValue | null): string[] {
   }
 }
 
-function parseDeleteReturnHref(formData: FormData): string {
-  const filter = parseInboxFilter(
-    typeof formData.get("filter") === "string"
-      ? (formData.get("filter") as string)
-      : undefined
-  );
-  const sort = parseInboxSort(
-    typeof formData.get("sort") === "string"
-      ? (formData.get("sort") as string)
-      : undefined
-  );
-  const ownerUserId = parseInboxOwnerUserId(formData.get("assigneeScopeUserId"));
-  return buildInboxHref(filter, {
-    ownerUserId,
-    sort,
-    conversationId: null,
-  });
-}
-
 function deleteSetupErrorMessage(): string {
   return (
     "Permanent delete is not fully set up on the database yet. In Supabase → SQL Editor, run the migration file supabase/migrations/20260521120000_staff_delete_conversations.sql, then try again. Also add SUPABASE_SERVICE_ROLE_KEY in Vercel if deletes still fail."
@@ -70,8 +44,6 @@ export async function deleteConversationsForeverAction(
   _prev: DeleteConversationsActionState,
   formData: FormData
 ): Promise<DeleteConversationsActionState> {
-  const returnHref = parseDeleteReturnHref(formData);
-
   try {
     const staff = await requireStaff();
     const ids = parseConversationIds(formData.get("conversationIds"));
@@ -121,17 +93,13 @@ export async function deleteConversationsForeverAction(
 
     revalidatePath("/inbox", "page");
     revalidatePath("/overview", "page");
-    redirect(returnHref);
-  } catch (e) {
-    if (
-      e &&
-      typeof e === "object" &&
-      "digest" in e &&
-      String((e as { digest?: string }).digest ?? "").startsWith("NEXT_REDIRECT")
-    ) {
-      throw e;
-    }
 
+    return {
+      ok: true,
+      error: null,
+      deletedCount: res.data.deletedCount,
+    };
+  } catch (e) {
     const message =
       e instanceof Error ? e.message : "Could not delete conversations.";
     if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) {

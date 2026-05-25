@@ -13,8 +13,10 @@ function isOpportunitySnapshot(value: unknown): value is OpportunitySnapshot {
   const o = value as Record<string, unknown>;
   return (
     typeof o.score === "number" &&
+    Number.isFinite(o.score) &&
     typeof o.intent_summary === "string" &&
     typeof o.confidence_pct === "number" &&
+    Number.isFinite(o.confidence_pct) &&
     Array.isArray(o.signals)
   );
 }

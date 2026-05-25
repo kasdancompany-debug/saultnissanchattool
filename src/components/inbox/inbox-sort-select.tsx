@@ -8,7 +8,7 @@ import {
   inboxSortLabel,
   type InboxSort,
 } from "@/lib/inbox/inbox-sort";
-import type { InboxFilter } from "@/server/data/inbox";
+import type { InboxFilter } from "@/lib/inbox/inbox-filter";
 
 import { buildInboxHref } from "./inbox-params";
 

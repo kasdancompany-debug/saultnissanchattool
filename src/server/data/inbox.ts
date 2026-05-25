@@ -51,10 +51,8 @@ const UNKNOWN_ASSIGNEE_NAME = "Unknown teammate";
 
 export type { InboxConversationListItem } from "@/lib/inbox/inbox-list-item";
 export { getCustomerDisplayName } from "@/lib/inbox/inbox-list-item";
-
-export type InboxMessageView = Tables<"messages"> & {
-  sender_label: string;
-};
+export type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
+import type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
 
 export type InboxThreadData = {
   conversation: Tables<"conversations"> & {
@@ -299,14 +297,21 @@ export async function listInboxConversations(
     buildMessageMetaMap(supabase, convIds),
   ]);
 
-  const items = entries.map((e) =>
-    conversationListEntryToInboxItem(
-      e,
-      previewMap.get(e.id) ?? null,
-      messageMetaMap.get(e.id),
-      currentStaffUserId
-    )
-  );
+  const items: InboxConversationListItem[] = [];
+  for (const e of entries) {
+    try {
+      items.push(
+        conversationListEntryToInboxItem(
+          e,
+          previewMap.get(e.id) ?? null,
+          messageMetaMap.get(e.id),
+          currentStaffUserId
+        )
+      );
+    } catch (mapErr) {
+      console.error("[inbox] skip list row after map error", e.id, mapErr);
+    }
+  }
 
   return ok(applyInboxSort(items, sort));
 }

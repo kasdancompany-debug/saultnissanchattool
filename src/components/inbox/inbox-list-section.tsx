@@ -27,14 +27,30 @@ export async function InboxListSection({
   widgetHref: string;
   canDeleteForever: boolean;
 }) {
-  const listRes = await loadInboxConversationList(
-    dealershipId,
-    filter,
-    staffUserId,
-    canViewDealershipWide,
-    assigneeScopeUserId,
-    sort
-  );
+  let listRes: Awaited<ReturnType<typeof loadInboxConversationList>>;
+  try {
+    listRes = await loadInboxConversationList(
+      dealershipId,
+      filter,
+      staffUserId,
+      canViewDealershipWide,
+      assigneeScopeUserId,
+      sort
+    );
+  } catch (loadErr) {
+    const message =
+      loadErr instanceof Error
+        ? loadErr.message
+        : "Could not load conversations.";
+    return (
+      <aside className="relative z-[1] flex min-h-0 w-full min-w-[320px] max-w-[440px] flex-col bg-muted/25 shadow-[8px_0_40px_-14px_rgba(15,23,42,0.12),4px_0_24px_-16px_rgba(15,23,42,0.08),inset_1px_0_0_rgba(15,23,42,0.04)] dark:bg-muted/15 dark:shadow-[8px_0_44px_-12px_rgba(0,0,0,0.55),inset_1px_0_0_rgba(255,255,255,0.04)]">
+        <InboxErrorPanel
+          title="Could not load conversations"
+          description={message}
+        />
+      </aside>
+    );
+  }
 
   if (!listRes.ok) {
     return (

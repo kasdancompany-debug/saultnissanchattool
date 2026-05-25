@@ -1,4 +1,4 @@
-import type { InboxMessageView } from "@/server/data/inbox";
+import type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
 import type { InboxChannelSurfaceId } from "@/lib/conversation/inbox-channel-surface";
 import { inboxChannelThreadEmptyBody } from "@/lib/conversation/inbox-channel-ux";
 import { InboxRetryFailedMessageForm } from "./inbox-retry-failed-message-form";

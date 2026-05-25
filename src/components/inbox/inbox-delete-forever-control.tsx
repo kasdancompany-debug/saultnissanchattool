@@ -60,6 +60,7 @@ export function InboxDeleteForeverControl({
     onDeleted?.();
     startTransition(() => {
       router.replace(listHref);
+      router.refresh();
       markInboxClientRefreshed();
     });
   }, [state.ok, onDeleted, listHref, router]);
