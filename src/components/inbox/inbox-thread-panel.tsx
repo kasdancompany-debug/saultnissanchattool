@@ -4,7 +4,10 @@ import type {
   StaffDepartment,
 } from "@/integrations/supabase/database.types";
 import type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
-import { isAfterHoursWebChatIntake } from "@/lib/conversation/widget-metadata";
+import {
+  isAfterHoursWebChatIntake,
+  readWidgetIntakeIntent,
+} from "@/lib/conversation/widget-metadata";
 import { isSentimentEscalationActive } from "@/lib/conversation/sentiment-escalation-metadata";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -35,6 +38,25 @@ const NO_REPLY: ConversationStatus[] = ["closed", "archived", "spam"];
 
 function canStaffReply(status: ConversationStatus): boolean {
   return !NO_REPLY.includes(status);
+}
+
+/** All customer turns + widget topic — used for intent tags (not just the last line). */
+function intelligenceTagContent(
+  messages: InboxMessageView[],
+  metadata: unknown
+): string {
+  const customerLines = messages
+    .filter((m) => m.sender_type === "customer")
+    .map((m) => m.body?.trim())
+    .filter((line): line is string => Boolean(line));
+  const intent = readWidgetIntakeIntent(metadata);
+  const intentPhrase =
+    intent === "trade_value"
+      ? "trade in trade value want to trade"
+      : intent
+        ? intent.replace(/_/g, " ")
+        : "";
+  return [...customerLines, intentPhrase].filter(Boolean).join("\n");
 }
 
 function getLatestMessageBody(messages: InboxMessageView[]): string {
@@ -110,6 +132,7 @@ export function InboxThreadPanel({
   const afterHours = isAfterHoursWebChatIntake(conversationMetadata);
   const sentimentAlert = isSentimentEscalationActive(conversationMetadata);
   const latestMessageBody = getLatestMessageBody(messages);
+  const tagContent = intelligenceTagContent(messages, conversationMetadata);
   const channelSurface = resolveInboxChannelSurface({
     channel,
     metadata: conversationMetadata,
@@ -152,7 +175,7 @@ export function InboxThreadPanel({
                 </Badge>
               ) : null}
               <ConversationIntelligenceTags
-                content={latestMessageBody}
+                content={tagContent || latestMessageBody}
                 badgeClassName="text-xs font-medium"
               />
               <ConversationStatusBadge status={status} />

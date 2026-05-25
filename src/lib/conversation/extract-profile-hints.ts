@@ -1,4 +1,5 @@
 import { normalizeE164 } from "@/lib/phone/e164";
+import { isPlausiblePersonName, sanitizePersonName } from "@/lib/conversation/person-name";
 
 const EMAIL_IN_TEXT_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
 const PHONE_HINT_RE = /(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?){2}\d{4}\b/;
@@ -29,7 +30,7 @@ export function extractProfileHintsFromText(text: string): ExtractedProfileHints
   for (const re of NAME_PATTERNS) {
     const m = trimmed.match(re);
     const raw = m?.[1]?.trim() ?? "";
-    if (raw.length >= 2 && raw.length <= 120) {
+    if (raw.length >= 2 && raw.length <= 120 && isPlausiblePersonName(raw)) {
       name = raw;
       break;
     }
@@ -74,7 +75,10 @@ const PLACEHOLDER_NAMES = new Set([
 
 export function isPlaceholderCustomerName(name: string | null | undefined): boolean {
   const n = name?.trim().toLowerCase() ?? "";
-  return n.length === 0 || PLACEHOLDER_NAMES.has(n);
+  if (n.length === 0 || PLACEHOLDER_NAMES.has(n)) {
+    return true;
+  }
+  return !isPlausiblePersonName(name);
 }
 
 /** Merge profile hints from every customer message in the thread (oldest → newest). */
@@ -96,7 +100,9 @@ export function mergeExtractedCustomerProfile(input: {
   fromHeuristics: ExtractedProfileHints;
 }): ExtractedProfileHints {
   return {
-    name: input.fromModel.name ?? input.fromHeuristics.name,
+    name:
+      sanitizePersonName(input.fromModel.name) ??
+      sanitizePersonName(input.fromHeuristics.name),
     email: input.fromModel.email ?? input.fromHeuristics.email,
     phoneE164: input.fromModel.phoneE164 ?? input.fromHeuristics.phoneE164,
   };

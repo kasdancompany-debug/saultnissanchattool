@@ -3,6 +3,7 @@ import {
   isPlaceholderCustomerName,
   type ExtractedProfileHints,
 } from "@/lib/conversation/extract-profile-hints";
+import { sanitizePersonName } from "@/lib/conversation/person-name";
 import { normalizeE164 } from "@/lib/phone/e164";
 
 export type EffectiveCustomerProfile = {
@@ -45,7 +46,7 @@ export function resolveEffectiveCustomerProfile(
   );
 
   const fromAi: ExtractedProfileHints = {
-    name: input.aiInsightsProfile?.name?.trim() ?? null,
+    name: sanitizePersonName(input.aiInsightsProfile?.name),
     email: input.aiInsightsProfile?.email?.trim() ?? null,
     phoneE164: normalizePhoneForDisplay(
       input.aiInsightsProfile?.phone_e164
@@ -53,17 +54,18 @@ export function resolveEffectiveCustomerProfile(
   };
 
   const extracted: ExtractedProfileHints = {
-    name: extractedFromChat.name ?? fromAi.name,
+    name:
+      sanitizePersonName(extractedFromChat.name) ?? fromAi.name,
     email: extractedFromChat.email ?? fromAi.email,
     phoneE164: extractedFromChat.phoneE164 ?? fromAi.phoneE164,
   };
 
+  const crmName = input.displayName.trim();
   const effectiveDisplayName =
     extracted.name?.trim() ||
-    (!isPlaceholderCustomerName(input.displayName)
-      ? input.displayName.trim()
-      : null) ||
-    input.displayName.trim() ||
+    (!isPlaceholderCustomerName(crmName) ? crmName : null) ||
+    normalizePhoneForDisplay(input.phoneE164) ||
+    crmName ||
     "Unknown customer";
 
   const effectivePhoneE164 =

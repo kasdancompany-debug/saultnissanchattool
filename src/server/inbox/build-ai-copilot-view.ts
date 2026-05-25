@@ -6,7 +6,6 @@ import type {
 } from "@/integrations/supabase/database.types";
 import { computeOpportunityScore } from "@/lib/opportunity/compute-opportunity";
 import { readAiInsightsFromMetadata } from "@/lib/conversation/ai-insights-metadata";
-import { readOpportunityFromMetadata } from "@/lib/opportunity/metadata";
 import { opportunityBandLabel } from "@/lib/opportunity/score-band";
 import { profileFieldsStillMissing } from "@/lib/conversation/extract-profile-hints";
 import { resolveEffectiveCustomerProfile } from "@/lib/conversation/resolve-effective-customer-profile";
@@ -189,22 +188,27 @@ export function buildAiCopilotView(input: {
 }): AiCopilotView {
   const customerText = collectCustomerText(input.messages);
   const aiInsights = readAiInsightsFromMetadata(input.conversationMetadata);
-  const opportunity =
-    readOpportunityFromMetadata(input.conversationMetadata) ??
-    computeOpportunityScore({
-      messageText: customerText,
-      classification: input.assist
+  const opportunity = computeOpportunityScore({
+    messageText: [customerText, aiInsights?.intent ?? ""].filter(Boolean).join("\n"),
+    classification: input.assist
+      ? {
+          intent: input.assist.intent,
+          confidence: input.assist.confidence,
+          urgency: input.assist.urgency,
+          sentiment: input.assist.sentiment,
+        }
+      : aiInsights
         ? {
-            intent: input.assist.intent,
-            confidence: input.assist.confidence,
-            urgency: input.assist.urgency,
-            sentiment: input.assist.sentiment,
+            intent: aiInsights.intent,
+            confidence: aiInsights.confidence,
+            urgency: aiInsights.urgency,
+            sentiment: aiInsights.sentiment,
           }
         : null,
-      conversationMetadata: input.conversationMetadata,
-      status: input.status,
-      department: input.department,
-    });
+    conversationMetadata: input.conversationMetadata,
+    status: input.status,
+    department: input.department,
+  });
 
   let appointmentProbability = opportunity.score;
   if (opportunity.signals.some((s) => s.id === "appointment" && s.active)) {

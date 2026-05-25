@@ -29,7 +29,7 @@ Hard rules (violations must set escalate_to_human to true and keep safe_draft_re
   - Return best-effort extracted details from the latest message + transcript.
   - Use null when unknown.
   - Never fabricate values.
-  - name: human name if clearly provided
+  - name: human name only if clearly provided (first + last, or "my name is …"); never use greetings, vehicle descriptions, or message openers (e.g. "Hi my car is …") as the name
   - email: valid email only
   - phone_e164: E.164 if possible (e.g. +17055550100). If not confidently normalizable, set null.
 - department: route sales for purchase/trade/financing; service for repairs/maintenance/oil/brakes; parts for parts-only; bdc for unclear sales leads; general only when truly ambiguous.

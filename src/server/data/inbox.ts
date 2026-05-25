@@ -32,7 +32,6 @@ import {
   type InboxSort,
 } from "@/lib/inbox/inbox-sort";
 import { computeOpportunityScore } from "@/lib/opportunity/compute-opportunity";
-import { readOpportunityFromMetadata } from "@/lib/opportunity/metadata";
 import type { MessageSenderType } from "@/integrations/supabase/database.types";
 import type { OpportunitySnapshot } from "@/lib/opportunity/types";
 import {
@@ -106,12 +105,23 @@ function resolveOpportunityForListItem(
   entry: ConversationListEntry,
   last_message_preview: { body: string; created_at: string } | null
 ): OpportunitySnapshot {
-  const stored = readOpportunityFromMetadata(entry.metadata);
-  if (stored) return stored;
-
+  const ai = readAiInsightsFromMetadata(entry.metadata);
   return computeOpportunityScore({
-    messageText: last_message_preview?.body ?? entry.title ?? "",
-    classification: null,
+    messageText: [
+      last_message_preview?.body ?? "",
+      ai?.intent ?? "",
+      entry.title ?? "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    classification: ai
+      ? {
+          intent: ai.intent,
+          confidence: ai.confidence,
+          urgency: ai.urgency,
+          sentiment: ai.sentiment,
+        }
+      : null,
     conversationMetadata: entry.metadata,
     status: entry.status,
     department: entry.department,
