@@ -6,23 +6,17 @@ import { usePathname, useRouter } from "next/navigation";
 import { Inbox, LayoutGrid, Settings } from "lucide-react";
 
 import { LogoutButton } from "@/components/auth/logout-button";
-import { canAccessDealershipAdminSettings } from "@/lib/auth/dealership-settings-access";
 import { canViewDealershipWideInbox } from "@/lib/inbox/filter-access";
 import type { StaffRole } from "@/integrations/supabase/database.types";
 import { useInboxQueueCounts } from "@/components/inbox/use-inbox-queue-counts";
 
 import { cn } from "@/lib/utils";
 
-const baseNav = [
+const nav = [
   { href: "/overview", label: "Overview", Icon: LayoutGrid },
   { href: "/inbox", label: "Inbox", Icon: Inbox },
+  { href: "/settings", label: "Settings", Icon: Settings },
 ] as const;
-
-const settingsNavItem = {
-  href: "/settings",
-  label: "Settings",
-  Icon: Settings,
-} as const;
 
 export function DashboardSidebar({
   dealershipName,
@@ -43,8 +37,6 @@ export function DashboardSidebar({
   const router = useRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const canViewAll = canViewDealershipWideInbox(staffRole);
-  const showSettings = canAccessDealershipAdminSettings(staffRole);
-  const nav = showSettings ? [...baseNav, settingsNavItem] : [...baseNav];
   const { counts } = useInboxQueueCounts(
     dealershipId,
     staffUserId,
