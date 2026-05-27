@@ -303,10 +303,10 @@ export function ExecutiveOverviewDashboard({
           accent="emerald"
         />
         <HeroMetric
-          icon="💰"
-          label="Est. gross influenced"
-          value={hero.estimatedGrossLabel}
-          sub="Staff-qualified leads × $4.2K model (not actual gross)"
+          icon="✓"
+          label="Qualified leads"
+          value={String(hero.qualifiedLeads)}
+          sub="Marked in Inbox by your team (not revenue)"
           delayMs={150}
           accent="amber"
         />

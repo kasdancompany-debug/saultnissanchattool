@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  computeExecutiveOverviewMetrics,
-  GROSS_PER_STAFF_QUALIFIED_LEAD,
-} from "@/lib/analytics/executive-metrics";
+import { computeExecutiveOverviewMetrics } from "@/lib/analytics/executive-metrics";
 
 const baseRow = {
   id: "c1",
@@ -39,7 +36,7 @@ describe("computeExecutiveOverviewMetrics", () => {
     });
 
     expect(metrics.hero.appointmentsBooked).toBe(0);
-    expect(metrics.hero.estimatedGrossInfluenced).toBe(0);
+    expect(metrics.hero.qualifiedLeads).toBe(0);
     expect(metrics.funnel.appointments).toBe(0);
     expect(metrics.funnel.qualifiedLeads).toBe(0);
   });
@@ -74,9 +71,7 @@ describe("computeExecutiveOverviewMetrics", () => {
 
     expect(metrics.funnel.qualifiedLeads).toBe(1);
     expect(metrics.funnel.appointments).toBe(1);
-    expect(metrics.hero.estimatedGrossInfluenced).toBe(
-      1 * GROSS_PER_STAFF_QUALIFIED_LEAD
-    );
+    expect(metrics.hero.qualifiedLeads).toBe(1);
   });
 
   it("does not inflate visitors beyond real conversations", () => {

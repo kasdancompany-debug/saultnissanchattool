@@ -14,8 +14,7 @@ export type { LeadSourceKey } from "@/lib/analytics/lead-source-attribution";
 
 export type ExecutiveHeroMetrics = {
   appointmentsBooked: number;
-  estimatedGrossInfluenced: number;
-  estimatedGrossLabel: string;
+  qualifiedLeads: number;
   leadConversionRate: number | null;
   leadConversionRateLabel: string;
   avgFirstResponseLabel: string | null;
@@ -51,23 +50,6 @@ type ConversationRow = {
   title: string | null;
   created_at: string;
 };
-
-/** Modeled gross per staff-confirmed qualified lead (not accounting). */
-export const GROSS_PER_STAFF_QUALIFIED_LEAD = 4_200;
-
-export function formatGrossCurrency(amount: number): string {
-  if (amount >= 1_000_000) {
-    return `$${(amount / 1_000_000).toFixed(1)}M`;
-  }
-  if (amount >= 10_000) {
-    return `$${Math.round(amount / 1000)}K`;
-  }
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 export function computeExecutiveOverviewMetrics(input: {
   periodRows: ConversationRow[];
@@ -121,8 +103,6 @@ export function computeExecutiveOverviewMetrics(input: {
       ? Math.round((qualifiedLeads / conversationsStarted) * 1000) / 10
       : null;
 
-  const estimatedGrossInfluenced = qualifiedLeads * GROSS_PER_STAFF_QUALIFIED_LEAD;
-
   const leadSourceOrder: { key: LeadSourceKey; label: string }[] = [
     { key: "website", label: "Website" },
     { key: "sms", label: "SMS" },
@@ -135,8 +115,7 @@ export function computeExecutiveOverviewMetrics(input: {
   return {
     hero: {
       appointmentsBooked,
-      estimatedGrossInfluenced,
-      estimatedGrossLabel: formatGrossCurrency(estimatedGrossInfluenced),
+      qualifiedLeads,
       leadConversionRate,
       leadConversionRateLabel:
         leadConversionRate !== null ? `${leadConversionRate}%` : "—",
