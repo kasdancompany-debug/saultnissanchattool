@@ -82,11 +82,7 @@ function lastAssistantAskedForContact(lastAssistant: string | null | undefined):
   );
 }
 
-function acknowledgeNewVehicleDetail(
-  text: string,
-  first: string | null,
-  topic: string
-): string {
+function acknowledgeNewVehicleDetail(text: string, first: string | null): string {
   const vehicle = extractVehicleLabelFromMessage(text);
   const greet = first ? `Thanks, ${first}` : "Thanks";
   if (vehicle) {
@@ -164,7 +160,7 @@ export function buildContextualWidgetReply(ctx: WidgetReplyContext): string {
     }
 
     if (mentionsVehicleOrService(text)) {
-      return acknowledgeNewVehicleDetail(text, first, topic);
+      return acknowledgeNewVehicleDetail(text, first);
     }
 
     if (mentionsVehicleOrService(thread) && !mentionsVehicleOrService(text)) {
