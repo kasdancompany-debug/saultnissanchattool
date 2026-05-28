@@ -64,7 +64,12 @@ export async function InboxThreadLoader({
   return (
     <InboxAiCopilotShell
       conversationId={thread.conversation.id}
+      conversationDepartment={thread.conversation.department}
       copilot={thread.ai_copilot}
+      appointments={thread.appointments}
+      serviceScheduler={thread.service_scheduler}
+      staffDirectory={staffDirectory}
+      currentStaffUserId={currentStaffUserId}
       hasAssignee={assigneeId != null}
       isCurrentAssignee={assigneeId === currentStaffUserId}
     >
@@ -76,6 +81,7 @@ export async function InboxThreadLoader({
         department={thread.conversation.department}
         status={thread.conversation.status}
         messages={thread.messages}
+        timeline={thread.timeline}
         assignee={thread.assignee}
         workflowCaption={thread.workflow_caption}
         currentStaffUserId={currentStaffUserId}
@@ -83,6 +89,7 @@ export async function InboxThreadLoader({
         canDeleteForever={canDeleteForever}
         staffDirectory={staffDirectory}
         conversationMetadata={thread.conversation.metadata}
+        serviceScheduler={thread.service_scheduler}
         aiEnabled={thread.conversation.ai_enabled}
         customerEmail={thread.customer_profile.email}
         customerPhoneE164={thread.customer_profile.phoneE164}

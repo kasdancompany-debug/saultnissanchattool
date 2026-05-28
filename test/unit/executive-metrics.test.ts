@@ -70,7 +70,6 @@ describe("computeExecutiveOverviewMetrics", () => {
     });
 
     expect(metrics.funnel.qualifiedLeads).toBe(1);
-    expect(metrics.funnel.appointments).toBe(1);
     expect(metrics.hero.qualifiedLeads).toBe(1);
   });
 

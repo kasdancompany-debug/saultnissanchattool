@@ -5,6 +5,8 @@ import { ChevronRight } from "lucide-react";
 import { buildInboxHref } from "@/components/inbox/inbox-params";
 import type { DealershipAnalyticsSnapshot } from "@/lib/analytics/types";
 import type { ExecutiveLeadSourceRow, ExecutiveSalesFunnel } from "@/lib/analytics/executive-metrics";
+import type { WarRoomAppointmentMetrics } from "@/lib/analytics/war-room-appointment-metrics";
+import { APPOINTMENT_DEPARTMENT_LABEL } from "@/lib/appointments/types";
 import { cn } from "@/lib/utils";
 
 function fadeInClass(delayMs: number): string {
@@ -226,6 +228,161 @@ function FunnelConnector() {
   );
 }
 
+function AppointmentStat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div className="border-border/60 bg-muted/20 rounded-lg border px-4 py-3">
+      <p className="text-muted-foreground text-[10px] font-semibold tracking-[0.14em] uppercase">
+        {label}
+      </p>
+      <p className="text-foreground mt-1 text-2xl font-black tabular-nums tracking-tight">
+        {value}
+      </p>
+      {sub ? (
+        <p className="text-muted-foreground mt-1 text-[11px] leading-snug">{sub}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function AppointmentsWarRoomRow({
+  metrics,
+  reportingLabel,
+  delayMs,
+}: {
+  metrics: WarRoomAppointmentMetrics;
+  reportingLabel: string;
+  delayMs: number;
+}) {
+  const deptTotal =
+    metrics.byDepartment.sales + metrics.byDepartment.service;
+  const deptMax = Math.max(metrics.byDepartment.sales, metrics.byDepartment.service, 1);
+
+  return (
+    <WarRoomShell delayMs={delayMs} className="p-6 sm:p-8">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-primary text-[10px] font-bold tracking-[0.22em] uppercase">
+            Visits
+          </p>
+          <h2 className="text-foreground mt-1 text-xl font-bold tracking-[-0.04em] sm:text-2xl">
+            Appointments
+          </h2>
+          <p className="text-muted-foreground mt-2 max-w-xl text-[11px] leading-relaxed">
+            Staff-confirmed records only (confirmed, completed, or no-show). AI intent
+            and proposed slots are not counted until a teammate confirms in Inbox.
+          </p>
+        </div>
+        <p className="text-muted-foreground text-[11px] font-medium tabular-nums">
+          {reportingLabel}
+        </p>
+      </div>
+
+      <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <AppointmentStat
+          label="Confirmed today"
+          value={String(metrics.confirmedToday)}
+          sub="Status confirmed · visit today (UTC)"
+        />
+        <AppointmentStat
+          label="Upcoming this week"
+          value={String(metrics.upcomingThisWeek)}
+          sub="Confirmed visits still scheduled"
+        />
+        <AppointmentStat
+          label="Conversion rate"
+          value={metrics.conversionRateLabel}
+          sub="Threads with a confirmed booking ÷ conversations"
+        />
+        <AppointmentStat
+          label="No-shows"
+          value={String(metrics.noShows)}
+          sub="Marked no-show in period"
+        />
+        <AppointmentStat
+          label="Completed"
+          value={String(metrics.completed)}
+          sub="Visit completed in period"
+        />
+        <AppointmentStat
+          label="Booked in period"
+          value={String(metrics.bookedInPeriod)}
+          sub="All confirmed lifecycle rows"
+        />
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-2">
+        <div>
+          <h3 className="text-foreground mb-3 text-sm font-semibold tracking-tight">
+            By department
+          </h3>
+          <ul className="space-y-3">
+            {(["sales", "service"] as const).map((dept) => {
+              const count = metrics.byDepartment[dept];
+              const widthPct =
+                count > 0 && deptTotal > 0
+                  ? Math.round((count / deptMax) * 100)
+                  : 0;
+              return (
+                <li key={dept} className="space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium">
+                      {APPOINTMENT_DEPARTMENT_LABEL[dept]}
+                    </span>
+                    <span className="text-muted-foreground tabular-nums font-semibold">
+                      {count}
+                    </span>
+                  </div>
+                  <div className="bg-muted/40 h-1.5 overflow-hidden rounded-full">
+                    {count > 0 ? (
+                      <div
+                        className="bg-primary/70 h-full rounded-full"
+                        style={{ width: `${widthPct}%` }}
+                      />
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-foreground mb-3 text-sm font-semibold tracking-tight">
+            Booked by staff
+          </h3>
+          {metrics.byStaff.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No staff-confirmed appointments in this window yet.
+            </p>
+          ) : (
+            <ul className="divide-border/60 divide-y rounded-lg border border-border/60">
+              {metrics.byStaff.map((row) => (
+                <li
+                  key={row.staffUserId}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                >
+                  <span className="text-foreground font-medium">{row.displayName}</span>
+                  <span className="text-muted-foreground tabular-nums font-bold">
+                    {row.count}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </WarRoomShell>
+  );
+}
+
 function SalesFunnelRow({ funnel, delayMs }: { funnel: ExecutiveSalesFunnel; delayMs: number }) {
   const stages: { label: string; value: number }[] = [
     { label: "Conversations", value: funnel.conversations },
@@ -242,9 +399,9 @@ function SalesFunnelRow({ funnel, delayMs }: { funnel: ExecutiveSalesFunnel; del
           Sales funnel
         </h2>
         <p className="text-muted-foreground mt-2 max-w-lg text-[11px] leading-relaxed">
-          Conversations started in the reporting window. Qualified, appointments, and sold
-          count only when a teammate marks them in Inbox — booking intent in chat does not
-          count until confirmed.
+          Conversations started in the reporting window. Qualified and sold use Inbox
+          pipeline marks. Appointments use confirmed appointment records — not chat
+          intent alone.
         </p>
       </div>
       <div className="flex flex-col items-stretch gap-6 overflow-x-auto pb-1 sm:flex-row sm:items-center sm:gap-0">
@@ -298,7 +455,7 @@ export function ExecutiveOverviewDashboard({
           icon="🚗"
           label="Appointments booked"
           value={String(hero.appointmentsBooked)}
-          sub="Staff-confirmed in Inbox (Appointment booked mark)"
+          sub="Confirmed appointment records in period"
           delayMs={75}
           accent="emerald"
         />
@@ -352,7 +509,13 @@ export function ExecutiveOverviewDashboard({
 
       <LeadSourcesRow sources={executive.leadSources} delayMs={525} />
 
-      <SalesFunnelRow funnel={executive.funnel} delayMs={600} />
+      <AppointmentsWarRoomRow
+        metrics={data.appointments}
+        reportingLabel={reportingPeriod.label}
+        delayMs={600}
+      />
+
+      <SalesFunnelRow funnel={executive.funnel} delayMs={675} />
     </div>
   );
 }

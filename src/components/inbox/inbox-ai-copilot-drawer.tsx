@@ -20,8 +20,16 @@ import { dispatchInboxInsertDraft } from "@/lib/inbox/inbox-draft";
 import { markInboxClientRefreshed } from "@/lib/inbox-client-refresh-coord";
 import { cardPanelHeaderClassName } from "@/lib/ui/panel";
 import type { AiCopilotView } from "@/types/ai-copilot";
+import type { InboxAppointmentRecord } from "@/types/inbox-appointment";
+import type { StaffDepartment } from "@/integrations/supabase/database.types";
+import {
+  InboxAppointmentPanel,
+  shouldShowInboxAppointmentPanel,
+} from "@/components/inbox/inbox-appointment-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { ServiceSchedulerPublicConfig } from "@/lib/service-scheduler/service-scheduler-message";
+import { ServiceSchedulerInsertButton } from "@/components/inbox/service-scheduler-insert-button";
 import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "inbox-ai-copilot-open";
@@ -83,52 +91,29 @@ function IntentLevelBadge({
   );
 }
 
-function AppointmentReadinessCard({
-  appointment,
-}: {
-  appointment: import("@/lib/opportunity/appointment-readiness").AppointmentReadiness;
-}) {
-  const tone =
-    appointment.kind === "booked"
-      ? "border-emerald-300/80 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-950/40"
-      : appointment.kind === "proposed"
-        ? "border-amber-300/80 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-950/40"
-        : appointment.kind === "interested"
-          ? "border-blue-300/80 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/35"
-          : "border-border/80 bg-muted/30";
-
-  return (
-    <div className={cn("space-y-2 rounded-md border px-3 py-2.5", tone)}>
-      <p className="text-foreground text-[15px] font-semibold tracking-tight">
-        {appointment.headline}
-      </p>
-      <p className="text-muted-foreground text-[12px] leading-snug">
-        {appointment.detail}
-      </p>
-      {appointment.promptMarkInPipeline ? (
-        <p className="text-foreground/90 text-[11px] font-medium leading-snug">
-          When it is on your calendar → Pipeline →{" "}
-          <span className="font-semibold">Appointment</span> (Overview counts that,
-          not this panel).
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 const insightCardClassName =
   "border-border/80 bg-muted/25 rounded-md border px-3 py-2.5 text-[13px] leading-relaxed";
 
 export function InboxAiCopilotDrawer({
   conversationId,
+  conversationDepartment,
   copilot,
+  appointments,
+  serviceScheduler,
+  staffDirectory,
+  currentStaffUserId,
   hasAssignee,
   isCurrentAssignee,
   open,
   onOpenChange,
 }: {
   conversationId: string;
+  conversationDepartment: StaffDepartment;
   copilot: AiCopilotView;
+  appointments: InboxAppointmentRecord[];
+  serviceScheduler: ServiceSchedulerPublicConfig | null;
+  staffDirectory: { id: string; display_name: string }[];
+  currentStaffUserId: string;
   hasAssignee: boolean;
   isCurrentAssignee: boolean;
   open: boolean;
@@ -247,6 +232,16 @@ export function InboxAiCopilotDrawer({
 
           <CopilotSection title="Suggested responses">
             <ul className="space-y-2">
+              {conversationDepartment === "service" && serviceScheduler ? (
+                <li>
+                  <ServiceSchedulerInsertButton
+                    conversationId={conversationId}
+                    label={serviceScheduler.label}
+                    variant="outline"
+                    className="w-full"
+                  />
+                </li>
+              ) : null}
               {copilot.suggestedResponses.map((reply) => (
                 <li key={reply}>
                   <button
@@ -295,9 +290,27 @@ export function InboxAiCopilotDrawer({
             </ul>
           </CopilotSection>
 
-          <CopilotSection title="Visit / appointment">
-            <AppointmentReadinessCard appointment={copilot.appointment} />
-          </CopilotSection>
+          {shouldShowInboxAppointmentPanel({
+            appointments,
+            readiness: copilot.appointment,
+          }) ? (
+            <CopilotSection title="Appointment">
+              <InboxAppointmentPanel
+                conversationId={conversationId}
+                conversationDepartment={conversationDepartment}
+                appointments={appointments}
+                readiness={copilot.appointment}
+                staffDirectory={staffDirectory}
+                currentStaffUserId={currentStaffUserId}
+                formAction={formAction}
+                isPending={isPending}
+                actionState={actionState}
+                customerName={copilot.customerProfile.displayName}
+                customerEmail={copilot.customerProfile.email}
+                customerPhoneE164={copilot.customerProfile.phoneE164}
+              />
+            </CopilotSection>
+          ) : null}
 
           <CopilotSection title="Recommended inventory">
             <ul className="space-y-1.5">
@@ -340,6 +353,14 @@ export function InboxAiCopilotDrawer({
             <Calendar className="size-3.5 shrink-0 opacity-70" aria-hidden />
             Book appointment
           </Button>
+          {conversationDepartment === "service" && serviceScheduler ? (
+            <ServiceSchedulerInsertButton
+              conversationId={conversationId}
+              label={serviceScheduler.label}
+              variant="outline"
+              className="min-w-0"
+            />
+          ) : null}
           <form action={formAction} className="min-w-0">
             <input type="hidden" name="conversationId" value={conversationId} />
             <input type="hidden" name="intent" value="escalate" />
@@ -404,13 +425,23 @@ export function InboxAiCopilotDrawer({
 
 export function InboxAiCopilotShell({
   conversationId,
+  conversationDepartment,
   copilot,
+  appointments,
+  serviceScheduler,
+  staffDirectory,
+  currentStaffUserId,
   hasAssignee,
   isCurrentAssignee,
   children,
 }: {
   conversationId: string;
+  conversationDepartment: StaffDepartment;
   copilot: AiCopilotView;
+  appointments: InboxAppointmentRecord[];
+  serviceScheduler: ServiceSchedulerPublicConfig | null;
+  staffDirectory: { id: string; display_name: string }[];
+  currentStaffUserId: string;
   hasAssignee: boolean;
   isCurrentAssignee: boolean;
   children: React.ReactNode;
@@ -438,7 +469,12 @@ export function InboxAiCopilotShell({
       {hydrated ? (
         <InboxAiCopilotDrawer
           conversationId={conversationId}
+          conversationDepartment={conversationDepartment}
           copilot={copilot}
+          appointments={appointments}
+          serviceScheduler={serviceScheduler}
+          staffDirectory={staffDirectory}
+          currentStaffUserId={currentStaffUserId}
           hasAssignee={hasAssignee}
           isCurrentAssignee={isCurrentAssignee}
           open={open}

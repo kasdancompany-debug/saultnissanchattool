@@ -10,6 +10,7 @@ import {
   dealershipProfileFormSchema,
   patchDealershipSettingsV1,
   routingSettingsV1Schema,
+  serviceSchedulingSettingsV1Schema,
   twilioPublicFormSchema,
 } from "@/lib/settings/dealership-settings-v1";
 import { requireStaff } from "@/server/auth/staff";
@@ -150,6 +151,52 @@ export async function updateRoutingSettingsAction(
 
   revalidatePath("/settings", "layout");
   return { ok: true, error: null, message: "Routing settings saved." };
+}
+
+export async function updateServiceSchedulingSettingsAction(
+  _prevState: SettingsActionState,
+  formData: FormData
+): Promise<SettingsActionState> {
+  const staff = await requireStaff();
+  if (!staffCanEditDealershipSettings(staff)) {
+    return forbidden();
+  }
+
+  const parsed = serviceSchedulingSettingsV1Schema.safeParse({
+    service_scheduler_url: formData.get("service_scheduler_url"),
+    service_scheduler_label: formData.get("service_scheduler_label"),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: firstZodMessage(parsed.error) };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: row, error: loadErr } = await supabase
+    .from("dealerships")
+    .select("metadata")
+    .eq("id", staff.dealership_id)
+    .single();
+
+  if (loadErr || !row) {
+    return { ok: false, error: loadErr?.message ?? "Could not load dealership." };
+  }
+
+  const metadata = patchDealershipSettingsV1(row.metadata as Json, {
+    service_scheduling: parsed.data,
+  });
+
+  const { error } = await supabase
+    .from("dealerships")
+    .update({ metadata, updated_at: new Date().toISOString() })
+    .eq("id", staff.dealership_id);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/settings", "layout");
+  revalidatePath("/inbox", "page");
+  return { ok: true, error: null, message: "Service scheduling saved." };
 }
 
 export async function updateAiPromptPlaceholdersAction(

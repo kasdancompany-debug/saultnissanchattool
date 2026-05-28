@@ -13,6 +13,11 @@ import {
 import { computeAverageFirstResponseSeconds } from "@/lib/analytics/first-response";
 import type { MessageTimingRow } from "@/lib/analytics/first-response";
 import { computeExecutiveOverviewMetrics } from "@/lib/analytics/executive-metrics";
+import {
+  computeWarRoomAppointmentMetrics,
+  endOfUtcWeek,
+} from "@/lib/analytics/war-room-appointment-metrics";
+import { repositoryListCountableAppointments } from "@/server/data/appointments-repository";
 import type { DealershipAnalyticsSnapshot } from "@/lib/analytics/types";
 import { loadLeadOfferAnalytics } from "@/server/data/lead-offers";
 import { formatDurationSeconds } from "@/lib/analytics/format";
@@ -483,6 +488,49 @@ export async function loadDealershipAnalytics(
     activeConversations: openRes.data,
   });
 
+  const weekEndIso = endOfUtcWeek(now).toISOString();
+  const appointmentsRes = await repositoryListCountableAppointments(
+    dealershipId,
+    { confirmedFrom: sinceIso, confirmedTo: weekEndIso },
+    supabase
+  );
+  if (!appointmentsRes.ok) {
+    return appointmentsRes;
+  }
+
+  const bookedStaffIds = [
+    ...new Set(
+      appointmentsRes.data
+        .map((r) => r.booked_by_user_id?.trim())
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const bookedStaffNameMap = new Map<string, string>();
+  if (bookedStaffIds.length > 0) {
+    const bookedStaffRes = await supabase
+      .from("staff_users")
+      .select("id, display_name")
+      .eq("dealership_id", dealershipId)
+      .in("id", bookedStaffIds);
+    if (bookedStaffRes.error) {
+      return fromPostgrestError(bookedStaffRes.error);
+    }
+    for (const s of bookedStaffRes.data ?? []) {
+      bookedStaffNameMap.set(s.id, s.display_name?.trim() || "Staff");
+    }
+  }
+
+  const appointments = computeWarRoomAppointmentMetrics({
+    rows: appointmentsRes.data,
+    conversationsStarted,
+    periodSinceIso: sinceIso,
+    now,
+    staffNamesById: bookedStaffNameMap,
+  });
+
+  executive.hero.appointmentsBooked = appointments.bookedInPeriod;
+  executive.funnel.appointments = appointments.bookedInPeriod;
+
   return ok({
     generatedAtIso: now.toISOString(),
     reportingPeriod: {
@@ -509,5 +557,6 @@ export async function loadDealershipAnalytics(
     openWithActiveSentimentFlag: openSentimentFlag,
     leadOffers: leadOffersRes.data,
     executive,
+    appointments,
   });
 }

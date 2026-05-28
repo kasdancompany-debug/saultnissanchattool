@@ -20,6 +20,12 @@ export type MessageDeliveryStatus = Database["public"]["Enums"]["message_deliver
 export type ConversationEventType = Database["public"]["Enums"]["conversation_event_type"];
 export type SocialEngagementHandlingState =
   Database["public"]["Enums"]["social_engagement_handling_state"];
+export type AppointmentDepartment =
+  Database["public"]["Enums"]["appointment_department"];
+export type AppointmentStatus =
+  Database["public"]["Enums"]["appointment_status"];
+export type AppointmentSource =
+  Database["public"]["Enums"]["appointment_source"];
 
 export type {
   Tables,

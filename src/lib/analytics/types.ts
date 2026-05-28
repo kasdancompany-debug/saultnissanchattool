@@ -1,4 +1,5 @@
 import type { ExecutiveOverviewMetrics } from "@/lib/analytics/executive-metrics";
+import type { WarRoomAppointmentMetrics } from "@/lib/analytics/war-room-appointment-metrics";
 import type { DealershipLeadOfferAnalytics } from "@/lib/lead-offers/types";
 
 /**
@@ -63,4 +64,6 @@ export type DealershipAnalyticsSnapshot = {
   leadOffers: DealershipLeadOfferAnalytics;
   /** Executive war-room KPIs for the Overview page. */
   executive: ExecutiveOverviewMetrics;
+  /** Appointment records (confirmed / completed / no_show) — not AI intent. */
+  appointments: WarRoomAppointmentMetrics;
 };

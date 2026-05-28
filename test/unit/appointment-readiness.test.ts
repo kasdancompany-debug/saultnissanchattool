@@ -11,6 +11,7 @@ describe("appointment readiness", () => {
     expect(customerProposedVisit("can i do tomorrow?")).toBe(true);
     const status = resolveAppointmentReadiness({
       customerText: "can i do tomorrow?",
+      conversationDepartment: "sales",
       pipelineAppointment: null,
     });
     expect(status.kind).toBe("proposed");
@@ -21,6 +22,7 @@ describe("appointment readiness", () => {
   it("shows booked when pipeline appointment is marked", () => {
     const status = resolveAppointmentReadiness({
       customerText: "can i do tomorrow?",
+      conversationDepartment: "sales",
       pipelineAppointment: {
         at: "2026-05-28T15:00:00.000Z",
         by: "staff-1",

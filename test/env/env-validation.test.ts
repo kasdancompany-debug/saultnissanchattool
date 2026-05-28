@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ZodError } from "zod";
 
 import { getInboundClassificationEnv } from "@/lib/env/inbound-classification-config";
@@ -8,7 +8,7 @@ import { validateStartupEnv } from "@/lib/env/startup";
 const ORIGINAL_ENV = { ...process.env };
 
 function setBaseValidDevEnv() {
-  process.env.NODE_ENV = "development";
+  vi.stubEnv("NODE_ENV", "development");
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "";
@@ -21,6 +21,7 @@ function setBaseValidDevEnv() {
 
 describe("environment validation", () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
     process.env = { ...ORIGINAL_ENV };
     setBaseValidDevEnv();
   });

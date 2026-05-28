@@ -4,6 +4,7 @@ import type { TypedSupabaseClient } from "@/server/db/server-client";
 import { getConversationRowById } from "@/server/data/conversations";
 import { scheduleInboundClassification } from "@/server/ai/run-inbound-classification";
 import { syncCustomerProfileFromInboundMessage } from "@/server/conversation/sync-customer-profile-from-inbound";
+import { maybeRecordAppointmentIntentFromInbound } from "@/server/appointments/record-appointment-intent";
 import { tryApplyMissedCallDepartmentReply } from "@/server/telephony/missed-call-inbound-hook";
 
 import type { NormalizedInboundMessage } from "./normalized-inbound-message";
@@ -39,6 +40,18 @@ export async function runPostInboundMessageHooks(input: {
         dealershipId: input.dealershipId,
         conversationId: input.conversationId,
         latestCustomerText: input.normalized.text,
+      },
+      input.db
+    );
+  }
+
+  if (conv.ok) {
+    await maybeRecordAppointmentIntentFromInbound(
+      {
+        dealershipId: input.dealershipId,
+        conversationId: input.conversationId,
+        customerMessageBody: input.normalized.text,
+        conversationDepartment: conv.data.department,
       },
       input.db
     );

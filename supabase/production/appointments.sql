@@ -1,0 +1,2 @@
+-- Apply via Supabase migration: supabase/migrations/20260528120000_appointments.sql
+-- (SQL Editor: paste the migration file contents; do not run on top of an already-migrated DB.)

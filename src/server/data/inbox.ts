@@ -12,9 +12,11 @@ import {
 import { getLatestMessageAiRunForConversation } from "@/server/data/message-ai-runs";
 import type { TypedSupabaseClient } from "@/server/db/server-client";
 import { buildAiAssistPanelView } from "@/server/inbox/build-ai-assist-panel-view";
+import { getAppointmentsForConversation } from "@/server/appointments";
 import { buildAiCopilotView } from "@/server/inbox/build-ai-copilot-view";
 import type { AiAssistPanelView } from "@/types/ai-assist-panel";
 import type { AiCopilotView } from "@/types/ai-copilot";
+import type { InboxAppointmentRecord } from "@/types/inbox-appointment";
 import { resolveConversationHandlingMode } from "@/lib/conversation/control-metadata";
 import { readAiInsightsFromMetadata } from "@/lib/conversation/ai-insights-metadata";
 import { resolveEffectiveCustomerProfile } from "@/lib/conversation/resolve-effective-customer-profile";
@@ -52,12 +54,19 @@ export type { InboxConversationListItem } from "@/lib/inbox/inbox-list-item";
 export { getCustomerDisplayName } from "@/lib/inbox/inbox-list-item";
 export type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
 import type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
+import { mergeInboxThreadTimeline } from "@/lib/inbox/conversation-timeline";
+import type { InboxThreadTimelineItem } from "@/lib/inbox/inbox-timeline-types";
+import type { ServiceSchedulerPublicConfig } from "@/lib/service-scheduler/service-scheduler-message";
+import { listConversationEventsForConversation } from "@/server/data/conversation-events-list";
+import { loadServiceSchedulerConfigForDealership } from "@/server/service-scheduler/service-scheduler-link";
 
 export type InboxThreadData = {
   conversation: Tables<"conversations"> & {
     customers: InboxConversationListItem["customers"];
   };
   messages: InboxMessageView[];
+  /** Messages + appointment / scheduler activity, chronological. */
+  timeline: InboxThreadTimelineItem[];
   customer_display_name: string;
   /** Profile fields for the center form — matches Insights (chat + CRM + AI). */
   customer_profile: {
@@ -76,6 +85,10 @@ export type InboxThreadData = {
   ai_assist_panel: AiAssistPanelView | null;
   /** Right-side AI Copilot drawer content. */
   ai_copilot: AiCopilotView;
+  /** Conversation-linked appointment records (newest first). */
+  appointments: InboxAppointmentRecord[];
+  /** External service scheduler deep link (service conversations only). */
+  service_scheduler: ServiceSchedulerPublicConfig | null;
 };
 
 /**
@@ -391,8 +404,6 @@ export async function getInboxThread(
     customers,
   };
 
-  const customer_display_name = getCustomerDisplayName(customers, convRow.title);
-
   const assignee =
     detail.assigned_to_user_id != null
       ? detailAssignee ?? {
@@ -402,7 +413,7 @@ export async function getInboxThread(
         }
       : null;
 
-  const [msgsRes, aiRes] = await Promise.all([
+  const [msgsRes, aiRes, schedulerRes, eventsRes] = await Promise.all([
     getMessagesForConversation(dealershipId, conversationId, {
       limit: 500,
       db: supabase,
@@ -412,6 +423,10 @@ export async function getInboxThread(
       conversationId,
       supabase
     ),
+    convRow.department === "service"
+      ? loadServiceSchedulerConfigForDealership(dealershipId, supabase)
+      : Promise.resolve(ok(null as ServiceSchedulerPublicConfig | null)),
+    listConversationEventsForConversation(dealershipId, conversationId, supabase),
   ]);
   if (!msgsRes.ok) {
     return msgsRes;
@@ -467,6 +482,47 @@ export async function getInboxThread(
     customer_display_name_resolved
   );
 
+  const appointmentsRes = await getAppointmentsForConversation(
+    dealershipId,
+    conversationId,
+    supabase
+  );
+  const conversationAppointments = appointmentsRes.ok ? appointmentsRes.data : [];
+
+  const staffNameById = new Map<string, string>();
+  if (assignee) {
+    staffNameById.set(assignee.id, assignee.display_name);
+  }
+  const eventRows = eventsRes.ok ? eventsRes.data : [];
+  const actorIds = [
+    ...new Set(
+      eventRows
+        .map((e) => e.actor_user_id)
+        .filter((id): id is string => Boolean(id?.trim()))
+    ),
+  ];
+  if (actorIds.length > 0) {
+    const actorsRes = await supabase
+      .from("staff_users")
+      .select("id, display_name, email")
+      .eq("dealership_id", dealershipId)
+      .in("id", actorIds);
+    if (!actorsRes.error && actorsRes.data) {
+      for (const row of actorsRes.data) {
+        staffNameById.set(
+          row.id,
+          row.display_name?.trim() || row.email || "Staff"
+        );
+      }
+    }
+  }
+
+  const timeline = mergeInboxThreadTimeline({
+    messages: enriched,
+    events: eventRows,
+    staffNameById,
+  });
+
   const ai_copilot = buildAiCopilotView({
     customerDisplayName: customer_display_name_resolved,
     customerEmail: effectiveProfile.email,
@@ -477,6 +533,7 @@ export async function getInboxThread(
     status: convRow.status,
     assist: ai_assist_panel,
     hasAssignee: assignee != null,
+    conversationAppointments,
   });
 
   return ok({
@@ -485,6 +542,7 @@ export async function getInboxThread(
       customers: syncedCustomers,
     },
     messages: enriched,
+    timeline,
     customer_display_name: customer_display_name_resolved,
     customer_profile: {
       displayName: effectiveProfile.displayName,
@@ -495,6 +553,11 @@ export async function getInboxThread(
     workflow_caption: buildWorkflowCaption(convRow),
     ai_assist_panel,
     ai_copilot,
+    appointments: conversationAppointments,
+    service_scheduler:
+      schedulerRes.ok && convRow.department === "service"
+        ? schedulerRes.data
+        : null,
   });
 }
 

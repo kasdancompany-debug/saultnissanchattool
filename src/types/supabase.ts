@@ -97,9 +97,22 @@ export type ConversationEventType =
   | "waiting_for_human"
   | "human_claimed"
   | "human_reply_sent"
-  | "ai_assist_enabled";
+  | "ai_assist_enabled"
+  | "service_scheduler_link_sent";
 
 export type LeadOfferEventType = "view" | "start" | "complete" | "lead";
+
+export type AppointmentDepartment = "sales" | "service";
+
+export type AppointmentStatus =
+  | "proposed"
+  | "awaiting_confirmation"
+  | "confirmed"
+  | "completed"
+  | "no_show"
+  | "cancelled";
+
+export type AppointmentSource = "ai_detected" | "manual" | "quick_action";
 
 export type Database = {
   public: {
@@ -763,6 +776,96 @@ export type Database = {
           },
         ];
       };
+      appointments: {
+        Row: {
+          id: string;
+          dealership_id: string;
+          conversation_id: string;
+          customer_id: string | null;
+          department: AppointmentDepartment;
+          status: AppointmentStatus;
+          proposed_datetime: string | null;
+          confirmed_datetime: string | null;
+          assigned_user_id: string | null;
+          booked_by_user_id: string | null;
+          vehicle_interest: string | null;
+          notes: string | null;
+          source: AppointmentSource;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          dealership_id: string;
+          conversation_id: string;
+          customer_id?: string | null;
+          department: AppointmentDepartment;
+          status?: AppointmentStatus;
+          proposed_datetime?: string | null;
+          confirmed_datetime?: string | null;
+          assigned_user_id?: string | null;
+          booked_by_user_id?: string | null;
+          vehicle_interest?: string | null;
+          notes?: string | null;
+          source?: AppointmentSource;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          dealership_id?: string;
+          conversation_id?: string;
+          customer_id?: string | null;
+          department?: AppointmentDepartment;
+          status?: AppointmentStatus;
+          proposed_datetime?: string | null;
+          confirmed_datetime?: string | null;
+          assigned_user_id?: string | null;
+          booked_by_user_id?: string | null;
+          vehicle_interest?: string | null;
+          notes?: string | null;
+          source?: AppointmentSource;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "appointments_dealership_id_fkey";
+            columns: ["dealership_id"];
+            isOneToOne: false;
+            referencedRelation: "dealerships";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "appointments_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "appointments_customer_id_fkey";
+            columns: ["customer_id"];
+            isOneToOne: false;
+            referencedRelation: "customers";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "appointments_assigned_user_id_fkey";
+            columns: ["assigned_user_id"];
+            isOneToOne: false;
+            referencedRelation: "staff_users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "appointments_booked_by_user_id_fkey";
+            columns: ["booked_by_user_id"];
+            isOneToOne: false;
+            referencedRelation: "staff_users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -883,6 +986,9 @@ export type Database = {
       conversation_event_type: ConversationEventType;
       social_engagement_handling_state: SocialEngagementHandlingState;
       lead_offer_event_type: LeadOfferEventType;
+      appointment_department: AppointmentDepartment;
+      appointment_status: AppointmentStatus;
+      appointment_source: AppointmentSource;
     };
     CompositeTypes: Record<string, never>;
   };

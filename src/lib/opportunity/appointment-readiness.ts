@@ -1,4 +1,13 @@
+import type { StaffDepartment } from "@/integrations/supabase/database.types";
 import type { PipelineOutcomeStamp } from "@/lib/conversation/pipeline-outcomes";
+import {
+  detectAppointmentIntent,
+  type AppointmentIntentInsight,
+} from "@/lib/opportunity/detect-appointment-intent";
+import type { AppointmentRow } from "@/lib/appointments/types";
+import { pickPrimaryAppointment } from "@/lib/appointments/types";
+
+export type { AppointmentIntentInsight };
 
 export type AppointmentReadinessKind =
   | "booked"
@@ -10,8 +19,10 @@ export type AppointmentReadiness = {
   kind: AppointmentReadinessKind;
   headline: string;
   detail: string;
-  /** Staff should use Pipeline → Appointment when calendar is set. */
+  /** Staff should use confirm flow when intent is detected (never auto-book). */
   promptMarkInPipeline: boolean;
+  /** Structured intent for Insights — suggest only until staff confirms. */
+  intent: AppointmentIntentInsight | null;
 };
 
 /** Customer named a day/time or asked to come in then. */
@@ -41,8 +52,7 @@ function proposedTimeHint(customerText: string): string | null {
     const line = lines[i];
     const day = line.match(DAY_HINT_RE);
     if (day) {
-      const word = day[1].toLowerCase();
-      return word.charAt(0).toUpperCase() + word.slice(1);
+      return formatDayLabel(day[1]);
     }
     if (PROPOSED_VISIT_RE.test(line)) {
       return "Specific day mentioned";
@@ -51,18 +61,104 @@ function proposedTimeHint(customerText: string): string | null {
   return null;
 }
 
+function formatDayLabel(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+}
+
 export function customerProposedVisit(customerText: string): boolean {
   const t = customerText.trim();
   if (!t) return false;
   if (PROPOSED_VISIT_RE.test(t)) return true;
   if (DAY_HINT_RE.test(t) && VISIT_INTEREST_RE.test(t)) return true;
   const recent = t.split(/\n/).slice(-4).join("\n");
-  return DAY_HINT_RE.test(recent) && /\b(can i|could i|how about|works for me)\b/i.test(recent);
+  return (
+    DAY_HINT_RE.test(recent) &&
+    /\b(can i|could i|how about|works for me)\b/i.test(recent)
+  );
+}
+
+function readinessFromAppointmentRow(
+  row: Pick<
+    AppointmentRow,
+    "status" | "confirmed_datetime" | "proposed_datetime" | "department"
+  >
+): AppointmentReadiness | null {
+  if (row.status === "confirmed" || row.status === "completed") {
+    const when = row.confirmed_datetime
+      ? formatStampDate(row.confirmed_datetime)
+      : "time not recorded";
+    return {
+      kind: "booked",
+      headline: "Appointment confirmed",
+      detail: `${row.department === "service" ? "Service" : "Sales"} · ${when}`,
+      promptMarkInPipeline: false,
+      intent: null,
+    };
+  }
+  if (row.status === "cancelled") {
+    return {
+      kind: "none",
+      headline: "Appointment cancelled",
+      detail: "This visit was cancelled. Add a new appointment if they reschedule.",
+      promptMarkInPipeline: false,
+      intent: null,
+    };
+  }
+  if (row.status === "no_show") {
+    const when = row.confirmed_datetime
+      ? formatStampDate(row.confirmed_datetime)
+      : null;
+    return {
+      kind: "booked",
+      headline: "No-show recorded",
+      detail: when ? `Confirmed slot · ${when}` : "Marked as no-show.",
+      promptMarkInPipeline: false,
+      intent: null,
+    };
+  }
+  if (row.status === "proposed" || row.status === "awaiting_confirmation") {
+    const when = row.proposed_datetime
+      ? formatStampDate(row.proposed_datetime)
+      : null;
+    return {
+      kind: "proposed",
+      headline: when ? `Proposed visit — ${when}` : "Proposed visit",
+      detail:
+        row.status === "awaiting_confirmation"
+          ? "Awaiting staff confirmation — use Confirm appointment when ready."
+          : "Staff must confirm before this counts as booked.",
+      promptMarkInPipeline: true,
+      intent: null,
+    };
+  }
+  return null;
+}
+
+function readinessFromIntent(
+  intent: AppointmentIntentInsight,
+  customerText: string
+): AppointmentReadiness {
+  const hint = proposedTimeHint(customerText) ?? intent.proposedTimeLabel;
+  const kind =
+    intent.confidence >= 50 || customerProposedVisit(customerText)
+      ? "proposed"
+      : "interested";
+
+  return {
+    kind,
+    headline: hint ? `Appointment intent — ${hint}` : "Appointment intent detected",
+    detail:
+      "Suggestion only — confirm with the customer, then use Confirm appointment. Nothing is booked automatically.",
+    promptMarkInPipeline: true,
+    intent,
+  };
 }
 
 export function resolveAppointmentReadiness(input: {
   customerText: string;
+  conversationDepartment: StaffDepartment;
   pipelineAppointment: PipelineOutcomeStamp | null | undefined;
+  conversationAppointments?: AppointmentRow[];
 }): AppointmentReadiness {
   if (input.pipelineAppointment?.at) {
     return {
@@ -70,7 +166,39 @@ export function resolveAppointmentReadiness(input: {
       headline: "Appointment booked",
       detail: `Marked in pipeline · ${formatStampDate(input.pipelineAppointment.at)}`,
       promptMarkInPipeline: false,
+      intent: null,
     };
+  }
+
+  const primary = pickPrimaryAppointment(input.conversationAppointments ?? []);
+  if (primary) {
+    const fromRow = readinessFromAppointmentRow(primary);
+    if (fromRow) {
+      if (
+        fromRow.kind === "booked" ||
+        primary.status === "cancelled" ||
+        primary.status === "no_show"
+      ) {
+        return fromRow;
+      }
+      const intent = detectAppointmentIntent({
+        customerText: input.customerText,
+        conversationDepartment: input.conversationDepartment,
+      });
+      return {
+        ...fromRow,
+        intent: intent.show ? intent : null,
+      };
+    }
+  }
+
+  const intent = detectAppointmentIntent({
+    customerText: input.customerText,
+    conversationDepartment: input.conversationDepartment,
+  });
+
+  if (intent.show) {
+    return readinessFromIntent(intent, input.customerText);
   }
 
   const proposed = customerProposedVisit(input.customerText);
@@ -80,8 +208,9 @@ export function resolveAppointmentReadiness(input: {
       kind: "proposed",
       headline: hint ? `Wants visit — ${hint}` : "Wants visit — confirm time",
       detail:
-        "Customer proposed a day or time in chat. Confirm in your calendar, then mark Appointment in Pipeline.",
+        "Customer proposed a day or time in chat. Staff must confirm — nothing is booked automatically.",
       promptMarkInPipeline: true,
+      intent: null,
     };
   }
 
@@ -89,15 +218,18 @@ export function resolveAppointmentReadiness(input: {
     return {
       kind: "interested",
       headline: "Discussing a visit",
-      detail: "Ask for a specific day and time, then mark Appointment in Pipeline when booked.",
+      detail:
+        "Ask for a specific day and time, then use Confirm appointment when ready.",
       promptMarkInPipeline: true,
+      intent: null,
     };
   }
 
   return {
     kind: "none",
     headline: "No visit proposed yet",
-    detail: "When they name a day or time, it will show here for you to confirm.",
+    detail: "When they name a day or time, appointment intent will appear here.",
     promptMarkInPipeline: false,
+    intent: null,
   };
 }

@@ -4,6 +4,8 @@ import type {
   StaffDepartment,
 } from "@/integrations/supabase/database.types";
 import type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
+import type { InboxThreadTimelineItem } from "@/lib/inbox/inbox-timeline-types";
+import type { ServiceSchedulerPublicConfig } from "@/lib/service-scheduler/service-scheduler-message";
 import {
   isAfterHoursWebChatIntake,
   readWidgetIntakeIntent,
@@ -97,6 +99,7 @@ export function InboxThreadPanel({
   department,
   status,
   messages,
+  timeline,
   assignee,
   workflowCaption,
   currentStaffUserId,
@@ -107,14 +110,17 @@ export function InboxThreadPanel({
   aiEnabled,
   customerEmail,
   customerPhoneE164,
+  serviceScheduler,
 }: {
   conversationId: string;
   customerDisplayName: string;
   conversationTitle: string | null;
   channel: ConversationChannel;
   department: StaffDepartment;
+  serviceScheduler: ServiceSchedulerPublicConfig | null;
   status: ConversationStatus;
   messages: InboxMessageView[];
+  timeline: InboxThreadTimelineItem[];
   assignee: {
     id: string;
     display_name: string;
@@ -235,7 +241,7 @@ export function InboxThreadPanel({
 
       <ScrollArea className="min-h-0 flex-1">
         <InboxThreadMessages
-          messages={messages}
+          timeline={timeline}
           channelSurface={channelSurface}
           conversationId={conversationId}
         />
@@ -247,6 +253,7 @@ export function InboxThreadPanel({
         conversationId={conversationId}
         messages={messages}
         channelSurface={channelSurface}
+        serviceScheduler={serviceScheduler}
         canReply={replyOk}
         disabledReason={
           replyOk

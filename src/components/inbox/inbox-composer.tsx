@@ -26,7 +26,9 @@ import {
 
 import { STAFF_MESSAGE_MAX_CHARS } from "@/lib/staff-message-limits";
 import type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
+import type { ServiceSchedulerPublicConfig } from "@/lib/service-scheduler/service-scheduler-message";
 import type { InboxChannelSurfaceId } from "@/lib/conversation/inbox-channel-surface";
+import { ServiceSchedulerInsertButton } from "@/components/inbox/service-scheduler-insert-button";
 import { inboxChannelReplyFootnote } from "@/lib/conversation/inbox-channel-ux";
 
 import { Button } from "@/components/ui/button";
@@ -86,6 +88,7 @@ export function InboxComposer({
   conversationId,
   messages,
   channelSurface,
+  serviceScheduler,
   canReply,
   disabledReason,
 }: {
@@ -93,6 +96,7 @@ export function InboxComposer({
   messages: InboxMessageView[];
   /** Shown in composer footnote only; does not change submission or API. */
   channelSurface: InboxChannelSurfaceId;
+  serviceScheduler: ServiceSchedulerPublicConfig | null;
   canReply: boolean;
   disabledReason?: string;
 }) {
@@ -165,8 +169,14 @@ export function InboxComposer({
             className="flex flex-col gap-3"
           >
             <input type="hidden" name="conversationId" value={conversationId} />
-            {quickReplies.length > 0 ? (
+            {(quickReplies.length > 0 || serviceScheduler) ? (
               <div className="flex flex-wrap gap-2" aria-label="Suggested replies">
+                {serviceScheduler ? (
+                  <ServiceSchedulerInsertButton
+                    conversationId={conversationId}
+                    label={serviceScheduler.label}
+                  />
+                ) : null}
                 {quickReplies.map((reply, index) => (
                   <Button
                     key={`${conversationId}-qr-${index}`}

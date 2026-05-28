@@ -9,6 +9,7 @@ import {
   resolveAppointmentReadiness,
 } from "@/lib/opportunity/appointment-readiness";
 import { computeOpportunityScore } from "@/lib/opportunity/compute-opportunity";
+import type { AppointmentRow } from "@/lib/appointments/types";
 import { readPipelineFromMetadata } from "@/lib/conversation/pipeline-outcomes";
 import { readAiInsightsFromMetadata } from "@/lib/conversation/ai-insights-metadata";
 import { opportunityBandLabel } from "@/lib/opportunity/score-band";
@@ -198,6 +199,7 @@ export function buildAiCopilotView(input: {
   status: ConversationStatus;
   assist: AiAssistPanelView | null;
   hasAssignee: boolean;
+  conversationAppointments?: AppointmentRow[];
 }): AiCopilotView {
   const customerText = collectCustomerText(input.messages);
   const aiInsights = readAiInsightsFromMetadata(input.conversationMetadata);
@@ -226,7 +228,9 @@ export function buildAiCopilotView(input: {
   const pipeline = readPipelineFromMetadata(input.conversationMetadata);
   const appointment = resolveAppointmentReadiness({
     customerText,
+    conversationDepartment: input.department,
     pipelineAppointment: pipeline.appointment,
+    conversationAppointments: input.conversationAppointments,
   });
 
   const leadMeta = input.conversationMetadata as Record<string, unknown> | null;

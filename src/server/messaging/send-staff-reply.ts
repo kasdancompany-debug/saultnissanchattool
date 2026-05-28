@@ -16,6 +16,7 @@ import {
 import { err, ok, type Result } from "@/server/result";
 
 import { ensureStaffHumanControlOnReply } from "@/server/messaging/ensure-staff-human-control";
+import { maybeRecordServiceSchedulerLinkOnStaffSend } from "@/server/service-scheduler/service-scheduler-link";
 import { resolveStaffReplyDeliveryStrategy } from "./outbound/channel-outbound-policy";
 
 const BLOCKED_REPLY_STATUSES: ConversationStatus[] = [
@@ -104,6 +105,21 @@ export async function sendStaffReply(
     );
     if (!smsRes.ok) {
       return err(smsRes.error.code, smsRes.error.message);
+    }
+    const schedulerEvent = await maybeRecordServiceSchedulerLinkOnStaffSend(
+      {
+        dealershipId: input.dealershipId,
+        conversationId: input.conversationId,
+        staffUserId: input.staffUserId,
+        body: input.body,
+      },
+      supabase
+    );
+    if (!schedulerEvent.ok) {
+      console.warn(
+        "[send-staff-reply] service_scheduler_link_sent event failed",
+        schedulerEvent.error.message
+      );
     }
     return ok(smsRes.data.message);
   }
@@ -267,5 +283,22 @@ export async function sendStaffReply(
   }
 
   message = sent.data;
+
+  const schedulerEvent = await maybeRecordServiceSchedulerLinkOnStaffSend(
+    {
+      dealershipId: input.dealershipId,
+      conversationId: input.conversationId,
+      staffUserId: input.staffUserId,
+      body: input.body,
+    },
+    supabase
+  );
+  if (!schedulerEvent.ok) {
+    console.warn(
+      "[send-staff-reply] service_scheduler_link_sent event failed",
+      schedulerEvent.error.message
+    );
+  }
+
   return ok(message);
 }

@@ -12,6 +12,7 @@ import {
   Settings2,
   Sparkles,
   Users,
+  Wrench,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -20,6 +21,11 @@ const links = [
   { href: "/settings/profile", label: "Profile", icon: Building2 },
   { href: "/settings/hours", label: "Business hours", icon: Clock },
   { href: "/settings/routing", label: "Routing", icon: GitBranch },
+  {
+    href: "/settings/service-scheduling",
+    label: "Service scheduling",
+    icon: Wrench,
+  },
   { href: "/settings/ai", label: "AI prompts", icon: Sparkles },
   { href: "/settings/lead-offers", label: "Lead offers", icon: Megaphone },
   { href: "/settings/integrations", label: "Integrations", icon: Plug },

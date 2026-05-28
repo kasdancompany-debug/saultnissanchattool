@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { Json } from "@/integrations/supabase/database.types";
 import type { StaffDepartment } from "@/integrations/supabase/database.types";
+import { isValidHttpUrl } from "@/lib/service-scheduler/service-scheduler-message";
 
 const departmentEnum = z.enum([
   "sales",
@@ -34,17 +35,36 @@ export const twilioPlaceholdersV1Schema = z.object({
   integration_notes: z.string().max(2000).optional().default(""),
 });
 
+export const serviceSchedulingSettingsV1Schema = z.object({
+  /** External service scheduling deep link (e.g. XTime, dealer site). */
+  service_scheduler_url: z
+    .string()
+    .max(2000)
+    .optional()
+    .default("")
+    .refine(
+      (s) => s.trim() === "" || isValidHttpUrl(s.trim()),
+      "Use a valid http(s) URL or leave blank"
+    ),
+  /** Link label shown to customers (defaults to Book Service). */
+  service_scheduler_label: z.string().max(80).optional().default(""),
+});
+
 export const dealershipSettingsV1Schema = z.object({
   version: z.literal(1),
   routing: routingSettingsV1Schema.optional(),
   ai: aiPromptPlaceholdersV1Schema.optional(),
   twilio: twilioPlaceholdersV1Schema.optional(),
+  service_scheduling: serviceSchedulingSettingsV1Schema.optional(),
 });
 
 export type DealershipSettingsV1 = z.infer<typeof dealershipSettingsV1Schema>;
 export type RoutingSettingsV1 = z.infer<typeof routingSettingsV1Schema>;
 export type AiPromptPlaceholdersV1 = z.infer<typeof aiPromptPlaceholdersV1Schema>;
 export type TwilioPlaceholdersV1 = z.infer<typeof twilioPlaceholdersV1Schema>;
+export type ServiceSchedulingSettingsV1 = z.infer<
+  typeof serviceSchedulingSettingsV1Schema
+>;
 
 /** Fully populated defaults for UI and server actions (nested keys always present). */
 export type ResolvedDealershipSettingsV1 = {
@@ -52,6 +72,7 @@ export type ResolvedDealershipSettingsV1 = {
   routing: RoutingSettingsV1;
   ai: AiPromptPlaceholdersV1;
   twilio: TwilioPlaceholdersV1;
+  service_scheduling: ServiceSchedulingSettingsV1;
 };
 
 const defaultSettingsV1: ResolvedDealershipSettingsV1 = {
@@ -66,6 +87,10 @@ const defaultSettingsV1: ResolvedDealershipSettingsV1 = {
   },
   twilio: {
     integration_notes: "",
+  },
+  service_scheduling: {
+    service_scheduler_url: "",
+    service_scheduler_label: "",
   },
 };
 
@@ -102,6 +127,10 @@ export function parseDealershipSettingsV1(
       ...defaultSettingsV1.twilio,
       ...(parsed.data.twilio ?? {}),
     }),
+    service_scheduling: serviceSchedulingSettingsV1Schema.parse({
+      ...defaultSettingsV1.service_scheduling,
+      ...(parsed.data.service_scheduling ?? {}),
+    }),
   };
 }
 
@@ -122,6 +151,9 @@ export function patchDealershipSettingsV1(
     twilio: patch.twilio
       ? { ...current.twilio, ...patch.twilio }
       : current.twilio,
+    service_scheduling: patch.service_scheduling
+      ? { ...current.service_scheduling, ...patch.service_scheduling }
+      : current.service_scheduling,
   };
   const base = isRecord(metadata) ? { ...metadata } : {};
   return { ...base, settings_v1: next } as Json;

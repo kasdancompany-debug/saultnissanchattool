@@ -1,4 +1,6 @@
 import type { InboxMessageView } from "@/lib/inbox/inbox-message-view";
+import type { InboxThreadTimelineItem } from "@/lib/inbox/inbox-timeline-types";
+import { InboxTimelineActivityRow } from "@/components/inbox/inbox-timeline-activity";
 import type { InboxChannelSurfaceId } from "@/lib/conversation/inbox-channel-surface";
 import { inboxChannelThreadEmptyBody } from "@/lib/conversation/inbox-channel-ux";
 import { InboxRetryFailedMessageForm } from "./inbox-retry-failed-message-form";
@@ -73,17 +75,19 @@ function transportError(message: InboxMessageView): string | null {
 }
 
 export function InboxThreadMessages({
-  messages,
+  timeline,
   channelSurface,
   conversationId,
 }: {
-  messages: InboxMessageView[];
+  timeline: InboxThreadTimelineItem[];
   channelSurface: InboxChannelSurfaceId;
   conversationId: string;
 }) {
+  const hasContent = timeline.length > 0;
+
   return (
-    <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-4">
-      {messages.length === 0 ? (
+    <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-4" role="list" aria-label="Conversation timeline">
+      {!hasContent ? (
         <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
           <p className="text-foreground text-sm font-medium">No messages yet</p>
           <p className="text-muted-foreground max-w-sm text-xs leading-relaxed">
@@ -91,7 +95,17 @@ export function InboxThreadMessages({
           </p>
         </div>
       ) : (
-        messages.map((m, index) => {
+        timeline.map((item, index) => {
+          if (item.type === "activity") {
+            return (
+              <InboxTimelineActivityRow
+                key={`activity-${item.activity.id}-${index}`}
+                activity={item.activity}
+              />
+            );
+          }
+
+          const m = item.message;
           const placement = bubblePlacement(m.sender_type);
           const isNarrow = m.sender_type === "system" || m.sender_type === "ai";
           const delivery = deliveryBadge(m);
@@ -101,6 +115,7 @@ export function InboxThreadMessages({
             <div
               key={`${m.id}-${index}`}
               className={cn("flex w-full flex-col gap-1", placement)}
+              role="listitem"
             >
               <div
                 className={cn(
