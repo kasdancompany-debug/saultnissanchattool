@@ -3,7 +3,11 @@
  * Avoids generic loops and avoids promising handoff before staff are actually queued.
  */
 
+const YEAR_MAKE_MODEL_RE =
+  /\b(20\d{2})\s+([a-z]+)\s+([a-z0-9][a-z0-9-]*)\b/i;
+
 const VEHICLE_PATTERNS: { re: RegExp; label: string }[] = [
+  { re: /\bmazda\s+cx-?5\b/i, label: "your Mazda CX-5" },
   { re: /\btundra\b/i, label: "the Tundra" },
   { re: /\b(tacoma|4runner|highlander|rav4|camry|corolla|sienna)\b/i, label: "that Toyota" },
   { re: /\b(f-150|f150|maverick|ranger|bronco|explorer|escape)\b/i, label: "that Ford" },
@@ -18,6 +22,18 @@ const VEHICLE_PATTERNS: { re: RegExp; label: string }[] = [
 export function extractVehicleLabelFromMessage(message: string): string | null {
   const text = message.trim();
   if (!text) return null;
+
+  const ymm = text.match(YEAR_MAKE_MODEL_RE);
+  if (ymm) {
+    const year = ymm[1];
+    const make = ymm[2].charAt(0).toUpperCase() + ymm[2].slice(1).toLowerCase();
+    const model = ymm[3]
+      .split(/[- ]+/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(" ");
+    return `your ${year} ${make} ${model}`;
+  }
+
   for (const { re, label } of VEHICLE_PATTERNS) {
     if (re.test(text)) return label;
   }
@@ -32,8 +48,11 @@ export function buildContextualFollowUpFromMessage(message: string): string {
   if (/\b(price|pricing|payment|lease|finance|apr|monthly)\b/i.test(message)) {
     return "I can help narrow that down. Which model and trim are you considering, and would you prefer to chat by text here or get a quick call from a specialist?";
   }
-  if (/\b(test drive|appointment|come in|visit|today|tomorrow)\b/i.test(message)) {
+  if (/\b(test drive|appointment|come in|visit|today|tomorrow|can i do)\b/i.test(message)) {
     return "Absolutely — what day and time work best for you, and which vehicle should we have ready?";
+  }
+  if (/\b(newer|upgrade|something new|new vehicle|new car)\b/i.test(message)) {
+    return "Got it — we'll focus on something newer for you. Do you prefer brand-new, certified pre-owned, or used?";
   }
   return "Thanks for the added detail. What would help most next — availability, trim options, or timing for a visit?";
 }

@@ -50,6 +50,10 @@ import { normalizeE164 } from "@/lib/phone/e164";
 import { getCustomerById, updateCustomerProfile } from "@/server/data/customers";
 import { buildContextualFollowUpFromMessage } from "@/lib/ai/contextual-follow-up";
 import {
+  isNearDuplicateAssistantReply,
+  normBodyForDedupe,
+} from "@/lib/ai/assistant-reply-dedupe";
+import {
   formatOffersForPrompt,
   loadOffersForAiContext,
   logOfferCompleteIfAttributed,
@@ -140,24 +144,6 @@ function buildHeuristicFallbackReply(message: string): string {
   }
   return "Thanks for reaching out. What vehicle or service are you looking for, and what would be most helpful first — availability, pricing direction, or a visit?";
 }
-
-function normBodyForDedupe(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[""''`]/g, "'")
-    .trim();
-}
-
-function isNearDuplicateAssistantReply(prev: string, next: string): boolean {
-  const a = normBodyForDedupe(prev);
-  const b = normBodyForDedupe(next);
-  if (a === b) return true;
-  if (a.length < 28 || b.length < 28) return false;
-  const n = 72;
-  return a.slice(0, n) === b.slice(0, n);
-}
-
 
 function normalizeProfilePatch(input: {
   name?: string | null;

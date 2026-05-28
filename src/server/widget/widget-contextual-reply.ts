@@ -1,5 +1,7 @@
 import "server-only";
 
+import { extractVehicleLabelFromMessage } from "@/lib/ai/contextual-follow-up";
+import { customerProposedVisit } from "@/lib/opportunity/appointment-readiness";
 import type { ExtractedProfileHints } from "@/lib/conversation/extract-profile-hints";
 import { isPlaceholderCustomerName } from "@/lib/conversation/extract-profile-hints";
 
@@ -52,9 +54,9 @@ function wantsAppointment(text: string): boolean {
 }
 
 function mentionsVehicleOrService(text: string): boolean {
-  return /\b(vehicle|car|truck|suv|oil|tire|brake|service|trade|financ)\b/i.test(
+  return /\b(vehicle|vehicles|car|cars|truck|trucks|suv|mazda|nissan|rogue|cx-?5|altima|frontier|oil|tire|brake|service|trade|financ|newer|upgrade)\b/i.test(
     text
-  );
+  ) || /\b20\d{2}\s+[a-z]+\s+[a-z0-9-]+\b/i.test(text);
 }
 
 function isFollowUpMessage(text: string): boolean {
@@ -78,6 +80,22 @@ function lastAssistantAskedForContact(lastAssistant: string | null | undefined):
   return /\b(name and phone|phone number|best number|reach you|follow up with you)\b/i.test(
     lastAssistant
   );
+}
+
+function acknowledgeNewVehicleDetail(
+  text: string,
+  first: string | null,
+  topic: string
+): string {
+  const vehicle = extractVehicleLabelFromMessage(text);
+  const greet = first ? `Thanks, ${first}` : "Thanks";
+  if (vehicle) {
+    return `${greet} — noted ${vehicle}. Are you looking for new, used, or certified, and anything specific you want to step up to?`;
+  }
+  if (/\b(newer|upgrade|something new)\b/i.test(text)) {
+    return `${greet} — we'll look at newer options for you. New, certified pre-owned, or used — and any models you're comparing?`;
+  }
+  return `${greet} — got those details. What matters most next: trim, budget range, or timing for a visit?`;
 }
 
 function resolveEffectiveContact(ctx: WidgetReplyContext): {
@@ -137,11 +155,19 @@ export function buildContextualWidgetReply(ctx: WidgetReplyContext): string {
       return `Hi ${greet} — we have your contact info${phoneDisplay ? ` (${phoneDisplay})` : ""}. Our team will follow up on your ${topic} request; if you have a preferred day or time, share it here and we'll note it.`;
     }
 
+    if (customerProposedVisit(text)) {
+      return `Perfect${first ? `, ${first}` : ""} — we'll note that timing. Our team will confirm your ${topic} visit shortly. Anything else about the vehicle we should have ready?`;
+    }
+
     if (wantsAppointment(combined) && !wantsAppointment(ctx.lastAssistantMessage ?? "")) {
       return `Thanks${first ? `, ${first}` : ""}. What day and time work best for your ${topic} appointment? We'll confirm with you shortly.`;
     }
 
-    if (mentionsVehicleOrService(text) || mentionsVehicleOrService(thread)) {
+    if (mentionsVehicleOrService(text)) {
+      return acknowledgeNewVehicleDetail(text, first, topic);
+    }
+
+    if (mentionsVehicleOrService(thread) && !mentionsVehicleOrService(text)) {
       return `Got it${first ? `, ${first}` : ""} — thanks for those details. A teammate will pick this up for ${topic}. Anything else we should pass along (timing, vehicle, or service need)?`;
     }
 

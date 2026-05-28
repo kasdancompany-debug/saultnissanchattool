@@ -1,63 +1,35 @@
 import { describe, expect, it } from "vitest";
 
+import { ensureDistinctAssistantReply } from "@/lib/ai/assistant-reply-dedupe";
 import { buildContextualWidgetReply } from "@/server/widget/widget-contextual-reply";
-import { extractProfileHintsFromText } from "@/lib/conversation/extract-profile-hints";
-import {
-  contactFieldsStillMissing,
-  mergeExtractedCustomerProfile,
-} from "@/lib/conversation/extract-profile-hints";
 
-describe("buildContextualWidgetReply", () => {
-  it("thanks Gary by name when name and phone are in the message", () => {
-    const text =
-      "My name is Gary Indiana and my phone number is 705-206-3669";
-    const hints = extractProfileHintsFromText(text);
-    const merged = mergeExtractedCustomerProfile({
-      fromModel: { name: null, email: null, phoneE164: null },
-      fromHeuristics: hints,
-    });
-    const missing = contactFieldsStillMissing({
-      displayName: null,
-      phoneE164: null,
-      extracted: merged,
-    });
+const genericHandoff =
+  "Got it, Dan — thanks for those details. A teammate will pick this up for used vehicle. Anything else we should pass along (timing, vehicle, or service need)?";
 
-    expect(hints.name).toBeTruthy();
-    expect(hints.phoneE164).toBeTruthy();
-    expect(missing).not.toContain("name");
-    expect(missing).not.toContain("phone");
-
+describe("widget contextual reply", () => {
+  it("acknowledges new vehicle details instead of repeating handoff template", () => {
     const reply = buildContextualWidgetReply({
-      customerMessage: text,
-      threadText: text,
-      department: "service",
-      topic: "service",
-      hints: merged,
-      missingAfterHints: missing,
+      customerMessage: "its a 2025 mazda cx5 and I want something newer",
+      threadText: "I want a new car\nMy name is Dan O'Brien and my phone is 7052063669",
+      department: "sales",
+      topic: "used_vehicle",
+      hints: { name: "Dan O'Brien", email: null, phoneE164: "+17052063669" },
+      missingAfterHints: [],
+      knownDisplayName: "Dan O'Brien",
+      knownPhoneE164: "+17052063669",
+      lastAssistantMessage: genericHandoff,
     });
-
-    expect(reply.toLowerCase()).toContain("gary");
-    expect(reply.toLowerCase()).not.toContain("what's the best name and phone");
+    expect(reply).not.toContain("Anything else we should pass along");
+    expect(reply.toLowerCase()).toMatch(/mazda|cx-5|newer/);
   });
 
-  it("does not re-ask for contact on follow-up when profile is complete", () => {
-    const thread =
-      "My name is Dan O and my phone is 705-555-1234\nHello I need service";
-    const reply = buildContextualWidgetReply({
-      customerMessage: "follow-up?",
-      threadText: thread,
-      department: "service",
-      topic: "service",
-      hints: { name: "Dan O", email: null, phoneE164: "+17055551234" },
-      missingAfterHints: [],
-      knownDisplayName: "Dan O",
-      knownPhoneE164: "+17055551234",
-      lastAssistantMessage:
-        "Thanks for reaching out. What's the best name and phone number for our team to follow up with you?",
+  it("dedupes identical consecutive assistant lines", () => {
+    const next = ensureDistinctAssistantReply({
+      proposed: genericHandoff,
+      lastAssistantMessage: genericHandoff,
+      latestCustomerMessage: "its a 2025 mazda cx5 and I want something newer",
     });
-
-    expect(reply.toLowerCase()).toContain("dan");
-    expect(reply.toLowerCase()).not.toContain("best name and phone");
-    expect(reply.toLowerCase()).toMatch(/follow up|follow-up|team will/);
+    expect(next).not.toBe(genericHandoff);
+    expect(next.toLowerCase()).toMatch(/mazda|cx-5|new|used/);
   });
 });

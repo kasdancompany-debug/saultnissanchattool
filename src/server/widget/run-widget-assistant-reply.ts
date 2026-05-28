@@ -15,6 +15,7 @@ import { getInboundClassificationEnv } from "@/lib/env/inbound-classification-co
 import { getConversationRowById } from "@/server/data/conversations";
 import { getCustomerById } from "@/server/data/customers";
 import { createMessage, getMessagesForConversation } from "@/server/data/messages";
+import { ensureDistinctAssistantReply } from "@/lib/ai/assistant-reply-dedupe";
 import { openaiChatCompletionsJson } from "@/server/ai/openai-chat";
 import {
   buildContextualWidgetReply,
@@ -259,6 +260,12 @@ ${job.customerMessageBody}
   } catch (error) {
     console.error("[widget] runWidgetAssistantReply OpenAI failed", error);
   }
+
+  replyText = ensureDistinctAssistantReply({
+    proposed: replyText,
+    lastAssistantMessage,
+    latestCustomerMessage: job.customerMessageBody,
+  });
 
   const aiMsg = await createMessage(
     {
