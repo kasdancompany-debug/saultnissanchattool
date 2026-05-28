@@ -90,8 +90,8 @@ type MetricsConversationInput = {
 };
 
 /**
- * War room + funnel: appointment **confirmed by staff** (`metadata.pipeline.appointment`).
- * Chat keywords, AI opportunity signals, and intake intent do not count.
+ * Pipeline appointment stamp (Inbox list tag / toolbar badge). War Room hero and
+ * appointment metrics use confirmed rows in `appointments` — see analytics loader.
  */
 export function hasAppointmentBooked(input: MetricsConversationInput): boolean {
   return Boolean(readPipelineFromMetadata(input.metadata).appointment);

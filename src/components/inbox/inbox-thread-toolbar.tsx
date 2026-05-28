@@ -352,11 +352,11 @@ export function InboxThreadToolbar({
 
           <div className="flex flex-col gap-2">
             <p className="text-muted-foreground text-xs font-medium">
-              Pipeline (Overview metrics)
+              Pipeline (qualified / sold / lost)
             </p>
             <p className="text-muted-foreground/80 text-[11px] leading-relaxed">
-              War room only counts these marks — not chat keywords or AI scores.
-              Mark appointment when it is actually booked.
+              Qualified and sold update Overview funnel marks. Appointments on
+              Overview use Confirm appointment in Insights — not this button.
             </p>
             {pipelineActive.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
@@ -393,7 +393,7 @@ export function InboxThreadToolbar({
                   "appointment",
                   Boolean(pipeline.appointment)
                 )}
-                title="Counts as an appointment booked on Overview."
+                title="Legacy pipeline stamp only. Use Confirm appointment in Insights for War Room counts."
               >
                 Appointment
               </SubmitButton>

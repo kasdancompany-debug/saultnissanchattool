@@ -205,6 +205,14 @@ export function InboxAppointmentCard({
         <p className="text-muted-foreground text-[12px] leading-snug">{readiness.detail}</p>
       ) : null}
 
+      {primary && !editing && primary.status === "proposed" ? (
+        <p className="text-amber-900/90 text-[11px] leading-snug dark:text-amber-100/90">
+          War Room and Appointments booked count this after you tap{" "}
+          <span className="font-semibold">Confirm appointment</span> below — proposed
+          slots are not counted yet.
+        </p>
+      ) : null}
+
       {primary && !editing ? (
         <div className="space-y-2">
           <DetailRow
