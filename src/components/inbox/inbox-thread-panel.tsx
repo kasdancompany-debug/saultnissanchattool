@@ -53,9 +53,11 @@ function intelligenceTagContent(
   const intentPhrase =
     intent === "trade_value"
       ? "trade in trade value want to trade"
-      : intent
-        ? intent.replace(/_/g, " ")
-        : "";
+      : intent === "new_vehicle" || intent === "used_vehicle"
+        ? "want a new car looking to buy"
+        : intent
+          ? intent.replace(/_/g, " ")
+          : "";
   return [...customerLines, intentPhrase].filter(Boolean).join("\n");
 }
 

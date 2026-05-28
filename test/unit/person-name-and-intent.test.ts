@@ -72,7 +72,36 @@ describe("trade-in intent scoring and tags", () => {
       status: "open",
       department: "sales",
     });
-    expect(snap.score).toBeGreaterThanOrEqual(65);
-    expect(snap.intent_summary.toLowerCase()).toContain("trade");
+    expect(snap.score).toBeGreaterThanOrEqual(80);
+    expect(snap.intent_summary.toLowerCase()).toMatch(/hot|trade/);
+  });
+
+  it("scores I want a new car as a hot lead when widget topic is new vehicle", () => {
+    const snap = computeOpportunityScore({
+      messageText: "I want a new car",
+      classification: null,
+      conversationMetadata: { widget: { intake_intent: "new_vehicle" } },
+      status: "open",
+      department: "sales",
+    });
+    expect(snap.score).toBeGreaterThanOrEqual(80);
+    expect(snap.intent_summary.toLowerCase()).toMatch(/hot|strong buyer/);
+  });
+
+  it("dampens just-looking tire kickers", () => {
+    const snap = computeOpportunityScore({
+      messageText: "Just browsing, maybe later",
+      classification: null,
+      conversationMetadata: {},
+      status: "open",
+      department: "sales",
+    });
+    expect(snap.score).toBeLessThanOrEqual(44);
+    expect(snap.intent_summary.toLowerCase()).toMatch(/browsing|qualify/);
+  });
+
+  it("tags I want a new car as high intent", () => {
+    const tags = deriveConversationIntelligenceTags("I want a new car");
+    expect(tags.some((t) => t.kind === "high_intent")).toBe(true);
   });
 });

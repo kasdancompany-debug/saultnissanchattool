@@ -4,6 +4,11 @@ import type {
 } from "@/integrations/supabase/database.types";
 import { readWidgetIntakeIntent } from "@/lib/conversation/widget-metadata";
 import { clampOpportunityScore } from "@/lib/opportunity/score-band";
+import {
+  hasTireKickerLanguage,
+  hasVehiclePurchaseIntent,
+  isWidgetPurchaseIntent,
+} from "@/lib/opportunity/purchase-intent";
 import type {
   OpportunitySignal,
   OpportunitySignalId,
@@ -19,18 +24,18 @@ const TIMELINE_RE =
 const TRADE_RE =
   /\b(trade(?:-|\s)?in|trade\s+in|want\s+to\s+trade|trading\s+in|trade\s+my|trade\s+value|instant\s+trade|appraisal|sell\s+my(?:\s+(?:car|vehicle|truck|suv))?)\b/i;
 
-/** Widget menu topic → score boost (visitor already self-qualified). */
+/** Widget menu choice — visitor self-selected topic. */
 const INTAKE_SCORE_BOOST: Record<string, number> = {
-  trade_value: 24,
-  new_vehicle: 14,
-  used_vehicle: 14,
-  financing: 12,
-  service: 8,
+  new_vehicle: 30,
+  used_vehicle: 28,
+  trade_value: 28,
+  financing: 18,
+  service: 6,
 };
 
 const SIGNAL_DEFS: { id: OpportunitySignalId; label: string; re: RegExp }[] = [
   { id: "financing", label: "Mentioned financing", re: FINANCING_RE },
-  { id: "returning_visitor", label: "Returning visitor", re: /^$/ }, // special
+  { id: "returning_visitor", label: "Returning visitor", re: /^$/ },
   { id: "appointment", label: "Wants appointment", re: APPOINTMENT_RE },
   { id: "timeline", label: "Mentioned timeline", re: TIMELINE_RE },
   { id: "trade", label: "Trade available", re: TRADE_RE },
@@ -81,23 +86,33 @@ function buildSignals(
   });
 }
 
+/** Staff-facing one-liner under the customer name in the inbox list. */
 function intentSummaryForScore(
   score: number,
-  department: StaffDepartment,
   activeCount: number,
-  hasTradeSignal: boolean
+  hasTradeSignal: boolean,
+  hasPurchaseIntent: boolean
 ): string {
   if (hasTradeSignal) {
-    if (score >= 72) return "Trade-in — ready for appraisal";
-    if (score >= 50) return "Trade-in interest";
+    if (score >= 82) return "Hot lead — trade-in";
+    if (score >= 65) return "Trade-in — follow up";
   }
-  if (score >= 80) {
-    if (department === "service") return "Ready to book service";
-    if (activeCount >= 3) return "High purchase intent";
-    return "Strong buying signals";
+  if (hasPurchaseIntent && score >= 82) {
+    return "Hot lead";
   }
-  if (score >= 50) return "Moderate interest";
-  return "Early exploration";
+  if (score >= 82) {
+    return activeCount >= 2 ? "Hot lead" : "Strong buyer";
+  }
+  if (score >= 68) {
+    return hasPurchaseIntent ? "Strong buyer" : "Worth a call";
+  }
+  if (score >= 52) {
+    return "Follow up soon";
+  }
+  if (score >= 38) {
+    return "Qualify more";
+  }
+  return "Browsing";
 }
 
 export type ComputeOpportunityInput = {
@@ -125,6 +140,8 @@ export function computeOpportunityScore(
     .trim();
 
   const widgetIntent = readWidgetIntakeIntent(input.conversationMetadata);
+  const widgetPurchase = isWidgetPurchaseIntent(widgetIntent);
+
   const signals = buildSignals(
     combined,
     input.conversationMetadata,
@@ -137,45 +154,73 @@ export function computeOpportunityScore(
   const activeSignals = signals.filter((s) => s.active);
   const hasTradeSignal = activeSignals.some((s) => s.id === "trade");
 
-  let score = 22;
-  const confidence = input.classification?.confidence;
-  if (confidence != null && Number.isFinite(confidence)) {
-    score += confidence * 38;
-  } else {
-    score += combined.length > 40 ? 18 : 8;
-  }
+  const purchaseInText = hasVehiclePurchaseIntent(combined);
+  const tireKicker = hasTireKickerLanguage(combined);
+  const hasPurchaseIntent = purchaseInText || widgetPurchase;
 
-  for (const sig of activeSignals) {
-    score += sig.id === "trade" ? 16 : 9;
-  }
+  let score = 10;
 
+  if (purchaseInText) {
+    score += 32;
+  }
   if (widgetIntent && INTAKE_SCORE_BOOST[widgetIntent]) {
     score += INTAKE_SCORE_BOOST[widgetIntent];
   }
 
-  const urgency = input.classification?.urgency;
-  if (urgency === "urgent") score += 10;
-  else if (urgency === "high") score += 6;
+  for (const sig of activeSignals) {
+    if (sig.id === "trade") score += 18;
+    else if (sig.id === "appointment") score += 16;
+    else if (sig.id === "timeline") score += 12;
+    else if (sig.id === "financing") score += 10;
+    else score += 8;
+  }
 
-  if (input.status === "waiting_for_human") score += 6;
+  const confidence = input.classification?.confidence;
+  if (confidence != null && Number.isFinite(confidence)) {
+    score += confidence * 18;
+  } else if (combined.length > 24) {
+    score += 6;
+  }
+
+  const urgency = input.classification?.urgency;
+  if (urgency === "urgent") score += 12;
+  else if (urgency === "high") score += 8;
+
+  if (input.status === "waiting_for_human") score += 8;
   if (input.department === "sales" || input.department === "bdc") score += 4;
 
-  if (input.classification?.sentiment === "negative") score -= 12;
+  if (input.classification?.sentiment === "negative") score -= 10;
+
+  if (tireKicker && !hasPurchaseIntent && activeSignals.length === 0) {
+    score -= 22;
+  }
+
+  if (hasPurchaseIntent && !tireKicker) {
+    score = Math.max(score, purchaseInText && widgetPurchase ? 86 : 78);
+  }
+
+  if (hasTradeSignal && widgetIntent === "trade_value") {
+    score = Math.max(score, 84);
+  }
+
+  if (tireKicker && !hasPurchaseIntent) {
+    score = Math.min(score, 44);
+  }
 
   const finalScore = clampOpportunityScore(score);
   const confidencePct = clampOpportunityScore(
     confidence != null && Number.isFinite(confidence)
       ? confidence * 100
-      : Math.min(72, 38 + activeSignals.length * 10)
+      : Math.min(78, 42 + activeSignals.length * 8 + (hasPurchaseIntent ? 12 : 0))
   );
 
   return {
     score: finalScore,
     intent_summary: intentSummaryForScore(
       finalScore,
-      input.department,
       activeSignals.length,
-      hasTradeSignal
+      hasTradeSignal,
+      hasPurchaseIntent
     ),
     confidence_pct: confidencePct,
     signals,

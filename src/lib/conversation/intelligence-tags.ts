@@ -1,3 +1,8 @@
+import {
+  hasTireKickerLanguage,
+  hasVehiclePurchaseIntent,
+} from "@/lib/opportunity/purchase-intent";
+
 export type ConversationIntelligenceTagKind =
   | "sales_lead"
   | "service_request"
@@ -11,7 +16,7 @@ export type ConversationIntelligenceTag = {
 };
 
 const SALES_RE =
-  /\b(buy|purchase|pricing?|payment|finance|financing|lease|apr|rate|trade(?:-in)?|test drive|inventory|in stock|availability|quote|msrp|trim|model|vin)\b/i;
+  /\b(buy|purchase|pricing?|payment|finance|financing|lease|apr|rate|trade(?:-in)?|test drive|inventory|in stock|availability|quote|msrp|trim|model|vin|new\s+(?:car|truck|suv)|used\s+(?:car|truck|suv)|want\s+a\s+new)\b/i;
 const SERVICE_RE =
   /\b(service|oil|brake|repair|maintenance|tire|tyre|alignment|check engine|diagnostic|appointment for service|schedule service|book service)\b/i;
 
@@ -43,9 +48,11 @@ function detectTopicTag(content: string): ConversationIntelligenceTag {
 function detectIntentTag(content: string): ConversationIntelligenceTag {
   const hasHighIntent = HIGH_INTENT_RE.test(content);
   const hasTradeIntent = TRADE_HIGH_INTENT_RE.test(content);
-  const hasPurchaseIntent = PURCHASE_INTENT_RE.test(content);
+  const hasPurchaseIntent =
+    PURCHASE_INTENT_RE.test(content) || hasVehiclePurchaseIntent(content);
   const hasUrgency = URGENCY_RE.test(content);
-  const hasLowIntent = LOW_INTENT_RE.test(content);
+  const hasLowIntent =
+    LOW_INTENT_RE.test(content) || hasTireKickerLanguage(content);
   const hasResearchIntent = RESEARCH_RE.test(content);
   const hasActionableTopic = SALES_RE.test(content) || SERVICE_RE.test(content);
 
@@ -58,7 +65,10 @@ function detectIntentTag(content: string): ConversationIntelligenceTag {
     return { kind: "high_intent", label: "High intent" };
   }
 
-  if (hasLowIntent || (hasResearchIntent && !hasActionableTopic)) {
+  if (
+    (hasLowIntent && !hasPurchaseIntent && !hasActionableTopic) ||
+    (hasResearchIntent && !hasActionableTopic)
+  ) {
     return { kind: "low_intent", label: "Low intent" };
   }
 

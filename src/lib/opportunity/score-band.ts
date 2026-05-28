@@ -13,7 +13,7 @@ export function opportunityScoreBand(score: number): OpportunityScoreBand {
 }
 
 export function opportunityBandLabel(band: OpportunityScoreBand): string {
-  if (band === "high") return "High opportunity";
-  if (band === "medium") return "Moderate opportunity";
-  return "Early stage";
+  if (band === "high") return "Hot lead";
+  if (band === "medium") return "Follow up";
+  return "Browsing";
 }
