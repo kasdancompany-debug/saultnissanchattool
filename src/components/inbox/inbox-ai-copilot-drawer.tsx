@@ -340,7 +340,7 @@ export function InboxAiCopilotDrawer({
             <Calendar className="size-3.5 shrink-0 opacity-70" aria-hidden />
             Book appointment
           </Button>
-          <form action={formAction} className="contents">
+          <form action={formAction} className="min-w-0">
             <input type="hidden" name="conversationId" value={conversationId} />
             <input type="hidden" name="intent" value="escalate" />
             <Button
@@ -351,7 +351,7 @@ export function InboxAiCopilotDrawer({
               className="h-9 w-full justify-start gap-1.5"
             >
               <AlertTriangle className="size-3.5 shrink-0 opacity-70" aria-hidden />
-              Escalate
+              {isPending ? "Escalating…" : "Escalate"}
             </Button>
           </form>
           {hasAssignee && isCurrentAssignee ? (
@@ -366,7 +366,7 @@ export function InboxAiCopilotDrawer({
               Assign owner
             </Button>
           ) : (
-            <form action={formAction} className="contents">
+            <form action={formAction} className="min-w-0">
               <input type="hidden" name="conversationId" value={conversationId} />
               <input type="hidden" name="intent" value="claim" />
               <Button
@@ -385,6 +385,11 @@ export function InboxAiCopilotDrawer({
         {actionState.error ? (
           <p className="text-destructive text-xs" role="alert">
             {actionState.error}
+          </p>
+        ) : null}
+        {actionState.message ? (
+          <p className="text-emerald-800 text-xs dark:text-emerald-100/90" role="status">
+            {actionState.message}
           </p>
         ) : null}
         {copilot.classification ? (

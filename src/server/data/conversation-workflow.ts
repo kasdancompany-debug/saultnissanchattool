@@ -4,8 +4,10 @@ import {
   humanManualOnlyControlPatch,
   mergeConversationControl,
 } from "@/lib/conversation/control-metadata";
+import { notifySalesHandoffAlert } from "@/server/alerts/sales-handoff-alerts";
 import { insertConversationEvent } from "@/server/data/conversation-events";
 import { getConversationRowById } from "@/server/data/conversations";
+import { getMessagesForConversation } from "@/server/data/messages";
 import { resolveDb } from "@/server/data/internal";
 import { fromPostgrestError } from "@/server/data/postgrest-error";
 import type { TypedSupabaseClient } from "@/server/db/server-client";
@@ -307,4 +309,118 @@ export async function unassignConversation(
   }
 
   return ok(res.data as ConversationRow);
+}
+
+export type StaffEscalateConversationInput = {
+  dealershipId: string;
+  conversationId: string;
+  actorUserId: string;
+  reason?: string;
+};
+
+/**
+ * Staff Escalate (Insights quick action): move thread to Needs human, pause AI autopilot
+ * posture, and notify the team — same queue as AI escalation, with staff attribution.
+ */
+export async function staffEscalateConversation(
+  input: StaffEscalateConversationInput,
+  db?: TypedSupabaseClient
+): Promise<Result<ConversationRow>> {
+  const dealershipId = input.dealershipId.trim();
+  const conversationId = input.conversationId.trim();
+  const actorUserId = input.actorUserId.trim();
+  const reason = input.reason?.trim() || "staff_escalate_copilot";
+
+  if (!dealershipId || !conversationId || !actorUserId) {
+    return err("VALIDATION", "dealershipId, conversationId, and actorUserId are required");
+  }
+
+  const supabase = await resolveDb(db);
+  const conv = await getConversationRowById(dealershipId, conversationId, supabase);
+  if (!conv.ok) {
+    return conv;
+  }
+
+  if (TERMINAL.includes(conv.data.status)) {
+    return err("FORBIDDEN", "Cannot escalate a closed conversation.");
+  }
+
+  if (conv.data.status === "waiting_for_human") {
+    return ok(conv.data);
+  }
+
+  const previousStatus = conv.data.status;
+  const now = new Date().toISOString();
+  const mergedMeta = mergeConversationControl(conv.data.metadata, {
+    handling_mode: "waiting_for_human",
+    ai_autopilot: false,
+  });
+
+  const upd = await supabase
+    .from("conversations")
+    .update({
+      status: "waiting_for_human",
+      metadata: mergedMeta,
+      updated_at: now,
+    })
+    .eq("dealership_id", dealershipId)
+    .eq("id", conversationId)
+    .select("*")
+    .single();
+
+  if (upd.error || !upd.data) {
+    return fromPostgrestError(upd.error);
+  }
+
+  await insertConversationEvent(supabase, {
+    conversation_id: conversationId,
+    event_type: "status_changed",
+    actor_user_id: actorUserId,
+    payload: {
+      previous_status: previousStatus,
+      new_status: "waiting_for_human",
+      reason,
+    },
+  });
+
+  await insertConversationEvent(supabase, {
+    conversation_id: conversationId,
+    event_type: "waiting_for_human",
+    actor_user_id: actorUserId,
+    payload: {
+      previous_status: previousStatus,
+      new_status: "waiting_for_human",
+      reason,
+    },
+  });
+
+  let lastCustomerMessage: string | null = null;
+  const msgs = await getMessagesForConversation(dealershipId, conversationId, {
+    limit: 12,
+    db: supabase,
+  });
+  if (msgs.ok) {
+    const latest = [...msgs.data].reverse().find((m) => m.sender_type === "customer");
+    lastCustomerMessage = latest?.body?.trim() ?? null;
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "") ?? "";
+  const inboxUrl =
+    appUrl.length > 0
+      ? `${appUrl}/inbox?filter=all_open&c=${encodeURIComponent(conversationId)}`
+      : null;
+
+  await notifySalesHandoffAlert({
+    dealershipId,
+    conversationId,
+    department: conv.data.department,
+    assignedToUserId: conv.data.assigned_to_user_id,
+    rulesApplied: [reason],
+    occurredAt: now,
+    customerLabel: conv.data.title?.trim() || "Customer",
+    lastCustomerMessage,
+    inboxUrl,
+  });
+
+  return ok(upd.data as ConversationRow);
 }

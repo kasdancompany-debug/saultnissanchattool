@@ -12,6 +12,7 @@ import {
 import {
   claimConversation,
   reassignConversation,
+  staffEscalateConversation,
   unassignConversation,
 } from "@/server/data/conversation-workflow";
 import { staffCanEditDealershipSettings } from "@/server/settings/staff-privilege";
@@ -25,7 +26,7 @@ export async function inboxConversationAction(
   const conversationId = String(formData.get("conversationId") ?? "").trim();
 
   if (!conversationId) {
-    return { ok: false, error: "Missing conversation." };
+    return { ok: false, error: "Missing conversation.", message: null };
   }
 
   const staff = await requireStaff();
@@ -41,7 +42,7 @@ export async function inboxConversationAction(
         takeover,
       });
       if (!res.ok) {
-        return { ok: false, error: res.error.message };
+        return { ok: false, error: res.error.message, message: null };
       }
       break;
     }
@@ -51,11 +52,12 @@ export async function inboxConversationAction(
           ok: false,
           error:
             "Only managers and admins can reassign customer ownership.",
+          message: null,
         };
       }
       const assignToUserId = String(formData.get("assignToUserId") ?? "").trim();
       if (!assignToUserId) {
-        return { ok: false, error: "Choose a teammate to assign." };
+        return { ok: false, error: "Choose a teammate to assign.", message: null };
       }
       const res = await reassignConversation({
         dealershipId: staff.dealership_id,
@@ -64,7 +66,7 @@ export async function inboxConversationAction(
         actorUserId: staff.id,
       });
       if (!res.ok) {
-        return { ok: false, error: res.error.message };
+        return { ok: false, error: res.error.message, message: null };
       }
       break;
     }
@@ -73,6 +75,7 @@ export async function inboxConversationAction(
         return {
           ok: false,
           error: "Only managers and admins can move a customer back to unassigned.",
+          message: null,
         };
       }
       const res = await unassignConversation({
@@ -82,20 +85,19 @@ export async function inboxConversationAction(
         actorRole: staff.role,
       });
       if (!res.ok) {
-        return { ok: false, error: res.error.message };
+        return { ok: false, error: res.error.message, message: null };
       }
       break;
     }
     case "escalate": {
-      const res = await updateConversationStatus(
-        staff.dealership_id,
+      const res = await staffEscalateConversation({
+        dealershipId: staff.dealership_id,
         conversationId,
-        "waiting_for_human",
-        staff.id,
-        { reason: "staff_escalate_copilot" }
-      );
+        actorUserId: staff.id,
+        reason: "staff_escalate_copilot",
+      });
       if (!res.ok) {
-        return { ok: false, error: res.error.message };
+        return { ok: false, error: res.error.message, message: null };
       }
       break;
     }
@@ -108,7 +110,7 @@ export async function inboxConversationAction(
         { reason: "staff_mark_pending" }
       );
       if (!res.ok) {
-        return { ok: false, error: res.error.message };
+        return { ok: false, error: res.error.message, message: null };
       }
       break;
     }
@@ -121,7 +123,7 @@ export async function inboxConversationAction(
         { reason: "staff_close" }
       );
       if (!res.ok) {
-        return { ok: false, error: res.error.message };
+        return { ok: false, error: res.error.message, message: null };
       }
       break;
     }
@@ -140,7 +142,7 @@ export async function inboxConversationAction(
         nextDepartment
       );
       if (!res.ok) {
-        return { ok: false, error: res.error.message };
+        return { ok: false, error: res.error.message, message: null };
       }
       break;
     }
@@ -162,7 +164,7 @@ export async function inboxConversationAction(
         outcome,
       });
       if (!res.ok) {
-        return { ok: false, error: res.error.message };
+        return { ok: false, error: res.error.message, message: null };
       }
       if (outcome === "sold" || outcome === "lost") {
         const closed = await updateConversationStatus(
@@ -173,7 +175,7 @@ export async function inboxConversationAction(
           { reason: `staff_mark_${outcome}` }
         );
         if (!closed.ok && closed.error.code !== "VALIDATION") {
-          return { ok: false, error: closed.error.message };
+          return { ok: false, error: closed.error.message, message: null };
         }
       }
       break;
@@ -196,15 +198,22 @@ export async function inboxConversationAction(
         outcome,
       });
       if (!res.ok) {
-        return { ok: false, error: res.error.message };
+        return { ok: false, error: res.error.message, message: null };
       }
       break;
     }
     default:
-      return { ok: false, error: "Unknown action." };
+      return { ok: false, error: "Unknown action.", message: null };
   }
 
   revalidatePath("/inbox", "page");
   revalidatePath("/overview", "page");
-  return { ok: true, error: null };
+  return {
+    ok: true,
+    error: null,
+    message:
+      intent === "escalate"
+        ? "Escalated — thread is in Needs human. AI autopilot is paused; reply when you're ready."
+        : null,
+  };
 }
