@@ -4,7 +4,12 @@ import type {
   ConversationStatus,
   StaffDepartment,
 } from "@/integrations/supabase/database.types";
+import {
+  customerProposedVisit,
+  resolveAppointmentReadiness,
+} from "@/lib/opportunity/appointment-readiness";
 import { computeOpportunityScore } from "@/lib/opportunity/compute-opportunity";
+import { readPipelineFromMetadata } from "@/lib/conversation/pipeline-outcomes";
 import { readAiInsightsFromMetadata } from "@/lib/conversation/ai-insights-metadata";
 import { opportunityBandLabel } from "@/lib/opportunity/score-band";
 import { profileFieldsStillMissing } from "@/lib/conversation/extract-profile-hints";
@@ -133,7 +138,8 @@ function buildSuggestedResponses(
 function buildNextActions(
   assist: AiAssistPanelView | null,
   text: string,
-  hasAssignee: boolean
+  hasAssignee: boolean,
+  appointmentHeadline: string
 ): string[] {
   const actions: string[] = [];
 
@@ -143,10 +149,17 @@ function buildNextActions(
   if (assist?.escalateEffective) {
     actions.push("Prioritize human response — escalation rules fired");
   }
-  if (APPOINTMENT_RE.test(text)) {
+  if (customerProposedVisit(text)) {
+    actions.push(
+      "Confirm date/time in your calendar, then mark Appointment in Pipeline"
+    );
+  } else if (APPOINTMENT_RE.test(text)) {
     actions.push("Confirm appointment date, time, and vehicle");
   } else {
     actions.push("Offer a concrete next step (visit, call, or test drive)");
+  }
+  if (appointmentHeadline.startsWith("Wants visit")) {
+    actions.unshift("Reply confirming tomorrow (or their proposed time)");
   }
   if (PRICE_RE.test(text) || TRADE_RE.test(text)) {
     actions.push("Gather budget, trade details, and timeline before quoting");
@@ -210,13 +223,11 @@ export function buildAiCopilotView(input: {
     department: input.department,
   });
 
-  let appointmentProbability = opportunity.score;
-  if (opportunity.signals.some((s) => s.id === "appointment" && s.active)) {
-    appointmentProbability = Math.min(100, appointmentProbability + 12);
-  }
-  if (APPOINTMENT_RE.test(customerText)) {
-    appointmentProbability = Math.min(100, appointmentProbability + 8);
-  }
+  const pipeline = readPipelineFromMetadata(input.conversationMetadata);
+  const appointment = resolveAppointmentReadiness({
+    customerText,
+    pipelineAppointment: pipeline.appointment,
+  });
 
   const leadMeta = input.conversationMetadata as Record<string, unknown> | null;
   const leadCapture = leadMeta?.lead_capture as Record<string, unknown> | undefined;
@@ -273,7 +284,12 @@ export function buildAiCopilotView(input: {
       aiInsights?.recommended_action ?? opportunity.intent_summary,
       input.messages.length
     ),
-    nextActions: buildNextActions(input.assist, customerText, input.hasAssignee),
+    nextActions: buildNextActions(
+      input.assist,
+      customerText,
+      input.hasAssignee,
+      appointment.headline
+    ),
     suggestedResponses: buildSuggestedResponses(input.assist, customerText),
     customerProfile: {
       displayName: effective.displayName,
@@ -284,8 +300,7 @@ export function buildAiCopilotView(input: {
     },
     likelyObjections: inferObjections(customerText, input.assist),
     opportunityScore: opportunity.score,
-    appointmentProbability,
-    appointmentProbabilityLabel: `${Math.round(appointmentProbability)}% likely`,
+    appointment,
     recommendedInventory: inferInventory(customerText, input.assist?.intent ?? ""),
     primaryDraftReply: primaryDraft,
     classification: input.assist,

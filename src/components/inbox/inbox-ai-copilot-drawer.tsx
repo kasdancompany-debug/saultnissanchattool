@@ -83,28 +83,35 @@ function IntentLevelBadge({
   );
 }
 
-function ProbabilityMeter({ value }: { value: number }) {
-  const pct = Math.round(Math.max(0, Math.min(100, value)));
+function AppointmentReadinessCard({
+  appointment,
+}: {
+  appointment: import("@/lib/opportunity/appointment-readiness").AppointmentReadiness;
+}) {
+  const tone =
+    appointment.kind === "booked"
+      ? "border-emerald-300/80 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-950/40"
+      : appointment.kind === "proposed"
+        ? "border-amber-300/80 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-950/40"
+        : appointment.kind === "interested"
+          ? "border-blue-300/80 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/35"
+          : "border-border/80 bg-muted/30";
+
   return (
-    <div className="border-border/80 bg-muted/30 space-y-2.5 rounded-md border px-3 py-2.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-foreground text-2xl font-semibold tracking-tight tabular-nums">
-          {pct}%
-        </span>
-        <span className="text-muted-foreground text-xs">Appointment likelihood</span>
-      </div>
-      <div
-        className="bg-muted h-1.5 overflow-hidden rounded-full"
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <div
-          className="bg-primary h-full rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+    <div className={cn("space-y-2 rounded-md border px-3 py-2.5", tone)}>
+      <p className="text-foreground text-[15px] font-semibold tracking-tight">
+        {appointment.headline}
+      </p>
+      <p className="text-muted-foreground text-[12px] leading-snug">
+        {appointment.detail}
+      </p>
+      {appointment.promptMarkInPipeline ? (
+        <p className="text-foreground/90 text-[11px] font-medium leading-snug">
+          When it is on your calendar → Pipeline →{" "}
+          <span className="font-semibold">Appointment</span> (Overview counts that,
+          not this panel).
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -288,8 +295,8 @@ export function InboxAiCopilotDrawer({
             </ul>
           </CopilotSection>
 
-          <CopilotSection title="Appointment probability">
-            <ProbabilityMeter value={copilot.appointmentProbability} />
+          <CopilotSection title="Visit / appointment">
+            <AppointmentReadinessCard appointment={copilot.appointment} />
           </CopilotSection>
 
           <CopilotSection title="Recommended inventory">

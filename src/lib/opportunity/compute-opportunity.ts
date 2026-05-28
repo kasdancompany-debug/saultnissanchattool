@@ -4,6 +4,7 @@ import type {
 } from "@/integrations/supabase/database.types";
 import { readWidgetIntakeIntent } from "@/lib/conversation/widget-metadata";
 import { clampOpportunityScore } from "@/lib/opportunity/score-band";
+import { customerProposedVisit } from "@/lib/opportunity/appointment-readiness";
 import {
   hasTireKickerLanguage,
   hasVehiclePurchaseIntent,
@@ -18,7 +19,7 @@ import type {
 const FINANCING_RE =
   /\b(financ(?:e|ing)|pre[- ]?approved|apr|lease|monthly payment|payment|credit|loan)\b/i;
 const APPOINTMENT_RE =
-  /\b(appointment|book(?:ing)?|schedule|test drive|come in|visit|stop by)\b/i;
+  /\b(appointment|book(?:ing)?|schedule|test drive|come in|visit|stop by|can i (?:come|do|book))\b/i;
 const TIMELINE_RE =
   /\b(today|tonight|tomorrow|this week|asap|right away|soon|timeline|by (?:mon|tue|wed|thu|fri|saturday|sunday))\b/i;
 const TRADE_RE =
@@ -91,8 +92,12 @@ function intentSummaryForScore(
   score: number,
   activeCount: number,
   hasTradeSignal: boolean,
-  hasPurchaseIntent: boolean
+  hasPurchaseIntent: boolean,
+  proposedVisit: boolean
 ): string {
+  if (proposedVisit && score >= 68) {
+    return "Visit proposed — confirm";
+  }
   if (hasTradeSignal) {
     if (score >= 82) return "Hot lead — trade-in";
     if (score >= 65) return "Trade-in — follow up";
@@ -151,12 +156,17 @@ export function computeOpportunityScore(
     const tradeSig = signals.find((s) => s.id === "trade");
     if (tradeSig) tradeSig.active = true;
   }
+  if (customerProposedVisit(combined)) {
+    const apptSig = signals.find((s) => s.id === "appointment");
+    if (apptSig) apptSig.active = true;
+  }
   const activeSignals = signals.filter((s) => s.active);
   const hasTradeSignal = activeSignals.some((s) => s.id === "trade");
 
   const purchaseInText = hasVehiclePurchaseIntent(combined);
   const tireKicker = hasTireKickerLanguage(combined);
   const hasPurchaseIntent = purchaseInText || widgetPurchase;
+  const proposedVisit = customerProposedVisit(combined);
 
   let score = 10;
 
@@ -203,6 +213,10 @@ export function computeOpportunityScore(
     score = Math.max(score, 84);
   }
 
+  if (proposedVisit) {
+    score = Math.max(score, 82);
+  }
+
   if (tireKicker && !hasPurchaseIntent) {
     score = Math.min(score, 44);
   }
@@ -220,7 +234,8 @@ export function computeOpportunityScore(
       finalScore,
       activeSignals.length,
       hasTradeSignal,
-      hasPurchaseIntent
+      hasPurchaseIntent,
+      proposedVisit
     ),
     confidence_pct: confidencePct,
     signals,

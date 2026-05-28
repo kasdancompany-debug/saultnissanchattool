@@ -1,4 +1,5 @@
 import type { StaffDepartment } from "@/integrations/supabase/database.types";
+import type { AppointmentReadiness } from "@/lib/opportunity/appointment-readiness";
 import type { OpportunityScoreBand } from "@/lib/opportunity/types";
 import type { AiAssistPanelView } from "@/types/ai-assist-panel";
 
@@ -22,8 +23,7 @@ export type AiCopilotView = {
   customerProfile: AiCopilotCustomerProfile;
   likelyObjections: string[];
   opportunityScore: number;
-  appointmentProbability: number;
-  appointmentProbabilityLabel: string;
+  appointment: AppointmentReadiness;
   recommendedInventory: string[];
   primaryDraftReply: string;
   classification: AiAssistPanelView | null;
